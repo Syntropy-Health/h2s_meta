@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# AI-RDLC: local AI working-state (sandbox) is ignored except the context
+# lineage (dispatches, seeds, handoffs), which is committed via /context-commit.
+.claude/usr/*
+!.claude/usr/*/
+.claude/usr/*/*
+!.claude/usr/*/*/
+.claude/usr/*/*/*
+!.claude/usr/*/*/dispatches/
+!.claude/usr/*/*/seeds/
+!.claude/usr/*/*/*handoff*.md
+.claude/logs/
+worktrees/
