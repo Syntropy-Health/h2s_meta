@@ -22,3 +22,16 @@
 | integration/env-reset | Slice C, C3 reset |
 | integration/env-step | Slice C, C3 step semantics |
 | integration/env-determinism | Slice C, C3 determinism / export_frame |
+
+
+---
+
+# Sealed suite manifest — Daypart slice B (membrane)
+
+Spec: `docs/daypart/contracts/CONTRACT-slice-B-membrane.md`
+
+| Category | File | Spec section |
+|---|---|---|
+| functional/membrane-dsl | test_membrane_dsl.py | B1 (rule pack, module surface), B2 (rules, normalization, disclaimer excision, D10 pair, compliant examples) |
+| functional/membrane-r2 | test_membrane_r2.py + data/boundary_corpus_v1.jsonl | B4 (recall, false-positive rate) |
+| integration/membrane-post | test_membrane_post.py | B3 (layer 0, post algorithm, trace fragment) |

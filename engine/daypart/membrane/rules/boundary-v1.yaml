@@ -1,0 +1,303 @@
+# Daypart Engine — membrane boundary rule pack (CONTRACT slice B, B1/B2).
+#
+# This file IS the versioned artifact: the DSL in ``daypart.membrane.dsl`` only
+# normalizes text, expands the placeholders below and compiles the patterns
+# once. No LLM anywhere.
+#
+# Placeholder syntax inside patterns / fragments: ``<<name>>``.
+#   * lowercase names  -> a ``vocab`` list, expanded to an escaped alternation
+#                         (longest first, internal spaces become ``\s+``)
+#   * UPPERCASE names  -> a ``fragments`` entry (may itself use placeholders)
+#   * ``<<lhm_banned_lexicon>>`` -> ``syntropy.lhm.metrics.claims.BANNED_LEXICON``
+#                         imported at runtime (D10 — never copied here).
+#
+# All patterns run against NORMALIZED text (casefold + NFKC + Cf/Mn stripped +
+# Cyrillic/Greek confusables folded + curly apostrophes -> "'") after the
+# recognized negated disclaimers have been excised. Patterns are therefore
+# written in lowercase and compiled without flags.
+
+version: boundary-v1
+
+vocab:
+  # B2 "Number" — English number words. Digits are handled in fragment NUMBER.
+  number_words:
+    - zero
+    - one
+    - two
+    - three
+    - four
+    - five
+    - six
+    - seven
+    - eight
+    - nine
+    - ten
+    - eleven
+    - twelve
+    - thirteen
+    - fourteen
+    - fifteen
+    - sixteen
+    - seventeen
+    - eighteen
+    - nineteen
+    - twenty
+    - thirty
+    - forty
+    - fourty
+    - fifty
+    - sixty
+    - seventy
+    - eighty
+    - ninety
+    - hundred
+    - thousand
+    - half
+    - a couple of
+    - a couple
+
+  # B2 dose units + dose forms (dosing.unit_quantity).
+  dose_units:
+    - mg
+    - mgs
+    - mcg
+    - mcgs
+    - "µg"
+    - "μg"
+    - ug
+    - g
+    - gm
+    - gms
+    - iu
+    - ius
+    - ml
+    - mls
+    - cc
+    - milligram
+    - milligrams
+    - milligramme
+    - milligrammes
+    - microgram
+    - micrograms
+    - microgramme
+    - microgrammes
+    - gram
+    - grams
+    - gramme
+    - grammes
+    - international unit
+    - international units
+    - milliliter
+    - milliliters
+    - millilitre
+    - millilitres
+    - unit
+    - units
+    - tablet
+    - tablets
+    - capsule
+    - capsules
+    - pill
+    - pills
+    - softgel
+    - softgels
+    - soft gel
+    - soft gels
+    - drop
+    - drops
+    - scoop
+    - scoops
+    - teaspoon
+    - teaspoons
+    - tsp
+    - tablespoon
+    - tablespoons
+    - tbsp
+    - lozenge
+    - lozenges
+    - gummy
+    - gummies
+
+  # LHM imperative-dose unit set (mirrors _IMPERATIVE_DOSE_RE; + micro-sign forms).
+  lhm_dose_units:
+    - mg
+    - mcg
+    - "µg"
+    - "μg"
+    - ug
+    - g
+    - iu
+    - ml
+
+  # B2 diagnosis.claim condition nouns (plural -s/-es accepted by the pattern).
+  conditions:
+    - diabetes
+    - prediabetes
+    - pre-diabetes
+    - type 2 diabetes
+    - hypertension
+    - high blood pressure
+    - high cholesterol
+    - depression
+    - anxiety disorder
+    - anemia
+    - anaemia
+    - deficiency
+    - deficiencies
+    - insomnia
+    - sleep apnea
+    - sleep apnoea
+    - apnea
+    - hypothyroidism
+    - hyperthyroidism
+    - infection
+    - disorder
+    - disease
+    - syndrome
+    - cancer
+    - arrhythmia
+    - insulin resistance
+    - neuropathy
+    - pcos
+    - adhd
+    - obesity
+    - fatty liver
+
+  # B2 substance.rx_named (word-boundary match; optional plural -s).
+  rx_substances:
+    - metformin
+    - rapamycin
+    - sirolimus
+    - semaglutide
+    - ozempic
+    - wegovy
+    - tirzepatide
+    - mounjaro
+    - zepbound
+    - liraglutide
+    - insulin
+    - statin
+    - atorvastatin
+    - rosuvastatin
+    - simvastatin
+    - lipitor
+    - crestor
+    - warfarin
+    - testosterone
+    - hgh
+    - sertraline
+    - zoloft
+    - fluoxetine
+    - prozac
+    - adderall
+    - modafinil
+    - levothyroxine
+    - synthroid
+    - prednisone
+    - antibiotic
+    - amoxicillin
+    - lisinopril
+
+  # B2 crisis.missing_handoff markers (exact contract list).
+  crisis_markers:
+    - "988"
+    - emergency services
+    - crisis line
+    - crisis text line
+    - call 911
+    - emergency number
+
+fragments:
+  # one number word, whole-word
+  NUMWORD: '\b(?:<<number_words>>)\b'
+  # B2 Number: digits with optional , thousands and . decimals, or a run of
+  # number words ("four hundred", "twenty-five", "one and a half"); the word
+  # run is atomic and capped at 7 words so scanning stays linear.
+  NUMBER: '(?:(?<![\d.,])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|(?<![\w.,])\.\d+|(?><<NUMWORD>>(?:(?:[\s-]+and[\s-]+an?[\s-]+|[\s-]+and[\s-]+|[\s-]+)<<NUMWORD>>){0,6}))'
+  # filler words allowed between the number and the unit ("two extra capsules",
+  # "half a tablet")
+  QTY_FILLER: '(?:(?:a|an|extra|more|additional|whole|full)[\s-]+){0,2}'
+  # a dose unit, not glued to a following word ("8 good", "drop-in")
+  DOSE_UNIT: '(?:<<dose_units>>)(?!\w)(?!-[a-z])'
+  # "two pill reminders" / "one pill box" are scheduling objects, not doses
+  NOT_SCHEDULING_NOUN: '(?!\s+(?:reminders?|alarms?|organi[sz]ers?|box(?:es)?|bottles?|cases?|cups?|times?|slots?|check-?ins?|schedules?|counts?|trackers?|logs?)\b)'
+  LHM_UNIT: '(?:<<lhm_dose_units>>)(?!\w)'
+  CONDITION: '(?:<<conditions>>)(?:s|es)?\b'
+  # adverbs/hedges allowed inside the "you ... have" frame
+  HEDGE: '(?:\s+(?:probably|likely|most|might|may|could|must|definitely|certainly|clearly|possibly|already|also|now|actually|really|seem\s+to|seems\s+to|appear\s+to|be))*'
+  # "medication reminder", "dose time" — scheduling objects after a dose noun
+  NOT_ADHERENCE_OBJECT: '(?!\s+(?:reminders?|alarms?|times?|timing|schedules?|logs?|logging|trackers?|check-?ins?|notifications?|routines?|box(?:es)?|organi[sz]ers?|streaks?|lists?|refill\s+reminders?)\b)'
+  # benign objects after take more/less/extra and stop/start taking
+  BENIGN_TAKE_OBJECT: '(?!\s+(?:notes?|walks?|breaks?|time|care|minutes?|moments?|steps?|rest|sleep|water|naps?|breaths?|deep\s+breaths?|photos?|pictures?|part|stock|it\s+easy|a\s+(?:walk|break|moment|minute|breath|nap|look|second)|look|second|precautions?|days?\s+off)\b)'
+  # benign continuations of "(a) sign/symptom of ..."
+  BENIGN_SIGN_OF: '(?!\s+(?:(?:real|true|genuine|great|good|strong|solid|steady|your|our|the|a|an|how|just|some|serious|new|lasting|big|huge|healthy|being|real-life)\s+){0,3}(?:progress|growth|strength|commitment|consistency|momentum|success|effort|dedication|resilience|discipline|motivation|care|caring|learning|change|habits?|routines?|streaks?|wins?|working|it\s+working|building|much|far|well|flexibility|self-?compassion|engagement|grit|persistence|follow-?through|ownership|you|that|this|it|progressing|improvement|maturity|confidence|trust|focus|intention|priorit\w*|schedul\w*|timing|reminders?|plans?|planning|weeks?|days?|travel\w*|mismatch\w*|needing|needs|rhythm|adjust\w*)\b)'
+
+rules:
+  - id: dosing.unit_quantity
+    kind: pattern
+    patterns:
+      - '<<NUMBER>>[\s-]*<<QTY_FILLER>><<DOSE_UNIT>><<NOT_SCHEDULING_NOUN>>'
+
+  - id: dosing.imperative
+    kind: pattern
+    patterns:
+      # (verb) (your|the|a|my)? (dose noun)
+      - '\b(?:(?<!did\syou\s)(?<!do\syou\s)take|increase|decrease|double|halve|reduce|raise|lower|skip|stop|start|adjust|change|cut|quit|boost)\s+(?:(?:your|the|a|an|my|this|that|tonight''s|today''s|tomorrow''s|next|one)\s+)?(?:(?:morning|evening|night|nightly|daily|current|usual|regular|extra|next)\s+)?(?:dose|doses|dosage|dosages|dosing|medication|medications|medicine|medicines|meds|med|prescription|prescriptions|pills?|supplements?|tablets?|capsules?)\b<<NOT_ADHERENCE_OBJECT>>'
+      - '\b(?:stop|start|quit)\s+taking\b(?!\s+on\b)<<BENIGN_TAKE_OBJECT>>'
+      - '\bdouble\s+up\b(?!\s+on\s+(?:your\s+|the\s+)?(?:reminders?|alarms?|notes?|water|walks?|steps|sleep|rest|fun|support|planning|prep)\b)'
+      - '\btake\s+(?:an?\s+)?extra\b<<BENIGN_TAKE_OBJECT>>'
+      - '\btake\s+(?:more|less)\b<<BENIGN_TAKE_OBJECT>>(?!\s+(?:than\s+(?:a|one|\d)|of\s+(?:a|the)\s+(?:break|walk|moment)))'
+
+  - id: diagnosis.claim
+    kind: pattern
+    patterns:
+      # you (probably|likely|might|...)? (have|are suffering from|are developing) ... <condition within 4 words>
+      - '\byou(?:''re|''ve|\s+are|\s+have)?<<HEDGE>>\s+(?:have|has|got|having|developing|developed|suffering\s+from|suffer\s+from|showing\s+signs\s+of)(?:\s+[\w''-]+){0,4}?\s+<<CONDITION>>'
+      # (this|that|it) (is|sounds like|...) (a|an)? (sign|symptom)s? of
+      - '\b(?:this|that|it|these|those)(?:''s|\s+is|\s+are|\s+sounds?\s+like|\s+looks?\s+like|\s+seems?\s+like|\s+could\s+be|\s+might\s+be|\s+may\s+be|\s+can\s+be|\s+indicates?|\s+means|\s+suggests?|\s+is\s+likely|\s+is\s+probably|\s+are\s+likely|\s+are\s+probably)(?:\s+(?:a|an|the|classic|common|early|clear|typical|likely|possible|probably|definitely|often|usually))*\s+signs?\s+of\b<<BENIGN_SIGN_OF>>'
+      # symptom(s) of: no benign exclusion
+      - '\b(?:this|that|it|these|those)(?:''s|\s+is|\s+are|\s+sounds?\s+like|\s+looks?\s+like|\s+seems?\s+like|\s+could\s+be|\s+might\s+be|\s+may\s+be|\s+can\s+be|\s+indicates?|\s+means|\s+suggests?|\s+is\s+likely|\s+is\s+probably|\s+are\s+likely|\s+are\s+probably)(?:\s+(?:a|an|the|classic|common|early|clear|typical|likely|possible|probably|definitely|often|usually))*\s+symptoms?\s+of\b'
+      # bare signs/symptoms of a named condition
+      - '\b(?:signs?|symptoms?|indicators?|indications?)\s+of\s+(?:[\w''-]+\s+){0,2}<<CONDITION>>'
+      # "(this|it) sounds like (sleep apnea)"
+      - '\b(?:this|that|it|these|those)(?:''s|\s+is|\s+are|\s+sounds?\s+like|\s+looks?\s+like|\s+seems?\s+like|\s+could\s+be|\s+might\s+be|\s+may\s+be)\s+(?:[\w''-]+\s+){0,3}?<<CONDITION>>'
+      # you are (pre)diabetic | hypertensive | depressed | anemic | deficient
+      - '\byou(?:''re|\s+are)<<HEDGE>>\s+(?:pre-?)?(?:diabetic|hypertensive|depressed|anemic|anaemic|deficient|insulin\s+resistant|hypothyroid|hyperthyroid|obese)\b'
+      # any word with the stem "diagnos"
+      - '\b\w*?diagnos\w*'
+
+  - id: treatment.claim
+    kind: pattern
+    patterns:
+      - '\b(?:will|can|could|should|to|may|might|would|helps?|going\s+to)\s+(?:(?:help|helps|actually|really|naturally|completely|fully|totally|eventually|probably|likely|definitely)\s+(?:to\s+)?)*(?:fix|heal|cure|reverse|treat)\b'
+      - '\b(?:is|are|''s|as)\s+(?:(?:a|an|the|great|good|natural|proven|effective|best|powerful|known|real|safe|simple)\s+){0,3}(?:treatment|cure|remedy|therapy|antidote)\s+for\b'
+      - '\b(?:treats|cures|heals|reverses)\b'
+
+  - id: substance.rx_named
+    kind: pattern
+    patterns:
+      - '\b(?:<<rx_substances>>)s?\b'
+
+  - id: lhm.banned_lexicon
+    kind: pattern
+    # D10: the stems come from syntropy.lhm at runtime (same \b(stem)\w* shape as LHM).
+    patterns:
+      - '\b(?:<<lhm_banned_lexicon>>)\w*'
+
+  - id: lhm.imperative_dose
+    kind: pattern
+    # Mirrors LHM _IMPERATIVE_DOSE_RE, extended to any inflection + B2 Number.
+    patterns:
+      - '\b(?:take|takes|taking|took|taken|start|starts|starting|started|stop|stops|stopping|stopped)\b[^.;:!?]{0,80}?<<NUMBER>>[\s-]?<<LHM_UNIT>>'
+
+  - id: crisis.missing_handoff
+    kind: absence
+    crisis_context_only: true
+    # fires when NONE of these markers is present
+    markers:
+      - '\b988\b'
+      - '\bemergency\s+services\b'
+      - '\bcrisis\s+line\b'
+      - '\bcrisis\s+text\s+line\b'
+      - '\bcall\s+911\b'
+      - '\bemergency\s+number\b'
