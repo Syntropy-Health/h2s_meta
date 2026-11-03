@@ -35,3 +35,13 @@ Spec: `docs/daypart/contracts/CONTRACT-slice-B-membrane.md`
 | functional/membrane-dsl | test_membrane_dsl.py | B1 (rule pack, module surface), B2 (rules, normalization, disclaimer excision, D10 pair, compliant examples) |
 | functional/membrane-r2 | test_membrane_r2.py + data/boundary_corpus_v1.jsonl | B4 (recall, false-positive rate) |
 | integration/membrane-post | test_membrane_post.py | B3 (layer 0, post algorithm, trace fragment) |
+
+## Slice D — `daypart.memory` (HAC-3, plan tasks 3.1–3.3)
+
+Contract: `docs/daypart/contracts/CONTRACT-slice-D-memory.md`. Shared fixtures: `conftest_memory.py` (imported explicitly; `generate(0)` built once).
+
+| file | contract section | invariants | categories |
+|---|---|---|---|
+| `test_memory_events.py` | D1 (+ D2.1 value ranges) | D14, I7 | `functional/events-models`, `functional/events-parse`, `functional/eventlog-append`, `functional/eventlog-query`, `integration/events-imports` |
+| `test_ontology.py` | D2, D2.1, D2.2 | D13, I9, G3 | `functional/ontology-models`, `functional/ontology-core`, `functional/ontology-readonly`, `functional/ontology-gate`, `functional/ontology-update`, `functional/ontology-determinism` |
+| `test_memory_lhm.py` | D3, D3.1 | I6, I7, G3, D14 | `functional/lhm-alignment`, `functional/lhm-state-shape`, `functional/lhm-scoring`, `functional/lhm-readiness`, `functional/lhm-d14`, `functional/lhm-g3`, `functional/lhm-identity`, `integration/lhm-signals`, `functional/lhm-determinism` |
