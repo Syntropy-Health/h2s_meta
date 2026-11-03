@@ -1,0 +1,36 @@
+name: engine
+
+on:
+  push:
+    branches: [main, "daypart/**"]
+    paths: ["engine/**", "docs/daypart/**", ".github/workflows/engine.yml"]
+  pull_request:
+    paths: ["engine/**", "docs/daypart/**", ".github/workflows/engine.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install (pinned LHM with scoring extra)
+        run: uv sync --locked
+      - name: LHM scoring extra present (D8 / failure table)
+        run: uv run python -c "from syntropy.lhm.metrics.scoring import SCORING_AVAILABLE; assert SCORING_AVAILABLE, 'lhm-scoring extra missing'"
+      - name: Sealed + unit tests
+        run: uv run pytest -q
+      - name: I1 — curated-25 never in generated training artifacts
+        run: uv run python -m daypart.ci.i1_check
+  attribution-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pre-existing LHM baseline untouched
+        run: test -z "$(git diff --stat f170784 HEAD -- syntropy tests pyproject.toml uv.lock)"
