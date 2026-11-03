@@ -21,3 +21,5 @@ build/
 !.claude/usr/*/*/*handoff*.md
 .claude/logs/
 worktrees/
+engine/.venv/
+**/__pycache__/
