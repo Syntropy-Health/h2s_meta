@@ -10,15 +10,17 @@ import sys
 import pydantic
 import pytest
 
-from daypart.train.modal_jobs import (
-    JobRunner,
-    JobSpec,
-    LoraConfig,
-    PollResult,
-    dpo_spec,
-    plan_pipeline,
-    sft_spec,
-)
+import daypart.train.modal_jobs  # noqa: F401  (names re-bound per test below: other suites may reload this module)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_names():
+    import importlib
+    mod = importlib.import_module("daypart.train.modal_jobs")
+    g = globals()
+    for n in ("JobRunner", "JobSpec", "LoraConfig", "PollResult", "dpo_spec", "plan_pipeline", "sft_spec"):
+        g[n] = getattr(mod, n)
+    yield
 
 
 @pytest.fixture()
