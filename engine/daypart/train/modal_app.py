@@ -4,58 +4,245 @@ This is the ONLY module under ``daypart`` that imports ``modal``. It is never
 imported by ``daypart.train`` and is not exercised by tests (needs Modal
 credentials). The volume layout is::
 
-    /vol/datasets/<file>.jsonl        uploaded by the run phase
+    /vol/datasets/<file>.jsonl        uploaded by the run phase (or ``smoke``)
     /vol/checkpoints/<spec.name>/...  trainer checkpoints (resume source)
     /vol/adapters/<spec.name>/        final LoRA adapter
+    /hf/                              Hugging Face cache (base weights, ~60 GB)
+
+Base model: ``meta-models/Muse-Glimmer-30B`` (``MuseGlimmerForConditionalGeneration``,
+29.8B bf16). It is trained text-only as 4-bit QLoRA (bitsandbytes nf4) on one
+H100: LoRA sits on the language tower only (:func:`language_lora_targets`); the
+vision tower, adapter and projection stay frozen in bf16 and never run.
+
+Smoke step (2 SFT steps on 16 rows, then 2 DPO steps on 16 pairs from that
+adapter), from ``engine/`` with Modal credentials::
+
+    python -m daypart.train.run --offline --out /tmp/daypart-data
+    uv run --with modal modal run daypart/train/modal_app.py::smoke --data-dir /tmp/daypart-data
 """
 
 from __future__ import annotations
 
 import json
-from pathlib import PurePosixPath
+import time
+from pathlib import Path, PurePosixPath
 
 import modal
 
-from daypart.train.modal_jobs import JobSpec, PollResult
+from daypart.train.modal_jobs import JobSpec, PollResult, language_lora_targets
 
 APP_NAME = "daypart-train"
 VOLUME_NAME = "daypart-train"
+HF_CACHE_VOLUME_NAME = "daypart-hf-cache"
 VOL = "/vol"
+HF_HOME = "/hf"
+BASE_MODEL = "meta-models/Muse-Glimmer-30B"
+#: Modal list price for one H100, USD per second ($3.95/h). Used only for the smoke estimate.
+H100_USD_PER_S = 0.001097
 
 app = modal.App(APP_NAME)
 volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
+hf_cache = modal.Volume.from_name(HF_CACHE_VOLUME_NAME, create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
-        "torch==2.4.1",
-        "transformers==4.46.3",
-        "peft==0.13.2",
-        "trl==0.12.2",
-        "datasets==3.1.0",
-        "accelerate==1.1.1",
+        "torch==2.14.1",
+        "transformers==5.22.1",  # first release line with model_type muse_glimmer
+        "peft==0.21.2",
+        "trl==1.17.1",  # its fused LM head applies Muse Glimmer's output_multiplier + logit softcap
+        "accelerate==1.15.0",
+        "bitsandbytes==0.50.2",
+        "datasets==5.1.0",
         "pydantic>=2.7,<3",
     )
+    .env({"HF_HOME": HF_HOME, "HF_XET_HIGH_PERFORMANCE": "1", "TOKENIZERS_PARALLELISM": "false"})
     .add_local_python_source("daypart")
 )
 
 _GPU = "H100"
 _TIMEOUT_S = 14400
+_VOLUMES = {VOL: volume, HF_HOME: hf_cache}
+#: Kept in bf16 (not quantized): the output head and the unused vision side.
+_KEEP_BF16 = ("lm_head", "vision_tower", "vision_adapter", "vision_projection")
 
 
 def _vol_path(rel: str) -> str:
     return rel if rel.startswith("/") else str(PurePosixPath(VOL) / rel)
 
 
+@app.function(image=image, volumes={HF_HOME: hf_cache}, cpu=4, memory=8192, timeout=3600)
+def prefetch_base(base_model: str = BASE_MODEL) -> dict:
+    """Download the base weights into the HF cache volume on CPU, so GPU time is not spent downloading."""
+    from huggingface_hub import snapshot_download
+
+    t0 = time.monotonic()
+    path = snapshot_download(base_model)
+    hf_cache.commit()
+    return {"path": path, "seconds": round(time.monotonic() - t0, 1)}
+
+
 def _load_base(spec: JobSpec):
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForImageTextToText, AutoTokenizer, BitsAndBytesConfig
 
     tokenizer = AutoTokenizer.from_pretrained(spec.base_model)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(spec.base_model, torch_dtype=torch.bfloat16)
+    quant = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        llm_int8_skip_modules=list(_KEEP_BF16),
+    )
+    # MuseGlimmerForConditionalGeneration; fed input_ids only, so the vision tower never runs.
+    model = AutoModelForImageTextToText.from_pretrained(
+        spec.base_model, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0}
+    )
+    model.config.get_text_config().use_cache = False
     return model, tokenizer
+
+
+def _lora_config(spec: JobSpec):
+    from peft import LoraConfig as PeftLoraConfig
+
+    return PeftLoraConfig(
+        r=spec.lora.rank,
+        lora_alpha=spec.lora.alpha,
+        lora_dropout=spec.lora.dropout,
+        target_modules=language_lora_targets(spec.lora.target_modules),
+        task_type="CAUSAL_LM",
+    )
+
+
+def _common_args(spec: JobSpec, max_steps: int | None) -> dict:
+    smoke = max_steps is not None
+    return {
+        "output_dir": _vol_path(spec.checkpoint_dir + ("-smoke" if smoke else "")),
+        "num_train_epochs": spec.epochs,
+        "max_steps": max_steps if smoke else -1,
+        "learning_rate": spec.learning_rate,
+        "per_device_train_batch_size": spec.batch_size,
+        "max_length": spec.max_seq_len,
+        "seed": spec.seed,
+        "bf16": True,
+        "gradient_checkpointing": True,
+        "gradient_checkpointing_kwargs": {"use_reentrant": False},
+        "optim": "paged_adamw_8bit",
+        "logging_steps": 1 if smoke else 10,
+        "save_strategy": "no" if smoke else "steps",
+        "save_steps": 100,
+        "save_total_limit": 3,
+        "report_to": [],
+    }
+
+
+def _load_rows(spec: JobSpec, keep: tuple[str, ...], max_rows: int | None):
+    from datasets import load_dataset
+
+    dataset = load_dataset("json", data_files=_verify_dataset(spec), split="train")
+    dataset = dataset.remove_columns([c for c in dataset.column_names if c not in keep])
+    if max_rows is not None:
+        dataset = dataset.select(range(min(max_rows, len(dataset))))
+    return dataset
+
+
+def _step_timer():
+    from transformers import TrainerCallback
+
+    class StepTimer(TrainerCallback):
+        def __init__(self) -> None:
+            self.step_s: list[float] = []
+            self._t = 0.0
+
+        def on_step_begin(self, args, state, control, **kwargs):
+            self._t = time.monotonic()
+
+        def on_step_end(self, args, state, control, **kwargs):
+            self.step_s.append(round(time.monotonic() - self._t, 2))
+
+    return StepTimer()
+
+
+def _finish(trainer, tokenizer, spec: JobSpec, smoke: bool, timer, t0: float, t_loaded: float, t_trained: float) -> dict:
+    import torch
+
+    adapter_dir = _vol_path(f"adapters/{spec.name}" + ("-smoke" if smoke else ""))
+    trainer.model.save_pretrained(adapter_dir)
+    tokenizer.save_pretrained(adapter_dir)
+    volume.commit()
+    return {
+        "adapter": adapter_dir,
+        "steps": trainer.state.global_step,
+        "rows": len(trainer.train_dataset),
+        "load_s": round(t_loaded - t0, 1),
+        "train_s": round(t_trained - t_loaded, 1),
+        "step_s": timer.step_s,
+        "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 1),
+        "log_tail": trainer.state.log_history[-5:],
+    }
+
+
+@app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
+def sft_train(
+    spec_json: str, resume_from: str | None = None, max_steps: int | None = None, max_rows: int | None = None
+) -> dict:
+    """SFT. ``max_steps``/``max_rows`` set make it a smoke run (no checkpoints, ``-smoke`` adapter)."""
+    from trl import SFTConfig, SFTTrainer
+
+    t0 = time.monotonic()
+    spec = JobSpec.model_validate(json.loads(spec_json))
+    if spec.kind != "sft":
+        raise ValueError("sft_train requires an sft spec")
+    volume.reload()
+    dataset = _load_rows(spec, ("messages",), max_rows)
+    model, tokenizer = _load_base(spec)
+    t_loaded = time.monotonic()
+    timer = _step_timer()
+    trainer = SFTTrainer(
+        model=model,
+        args=SFTConfig(**_common_args(spec, max_steps)),
+        train_dataset=dataset,
+        processing_class=tokenizer,  # a tokenizer, not the processor: text-only training
+        peft_config=_lora_config(spec),
+        callbacks=[timer],
+    )
+    trainer.model.print_trainable_parameters()
+    trainer.train(resume_from_checkpoint=_vol_path(resume_from) if resume_from else None)
+    t_trained = time.monotonic()
+    return _finish(trainer, tokenizer, spec, max_steps is not None, timer, t0, t_loaded, t_trained)
+
+
+@app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
+def dpo_train(
+    spec_json: str, resume_from: str | None = None, max_steps: int | None = None, max_rows: int | None = None
+) -> dict:
+    """DPO from the SFT adapter. ``max_steps``/``max_rows`` as in :func:`sft_train`."""
+    from peft import PeftModel
+    from trl import DPOConfig, DPOTrainer
+
+    t0 = time.monotonic()
+    spec = JobSpec.model_validate(json.loads(spec_json))
+    if spec.kind != "dpo" or not spec.init_adapter or spec.beta is None:
+        raise ValueError("dpo_train requires a dpo spec with init_adapter and beta")
+    volume.reload()
+    dataset = _load_rows(spec, ("prompt", "chosen", "rejected"), max_rows)
+    base, tokenizer = _load_base(spec)
+    model = PeftModel.from_pretrained(base, _vol_path(spec.init_adapter), is_trainable=True)
+    t_loaded = time.monotonic()
+    timer = _step_timer()
+    trainer = DPOTrainer(
+        model=model,
+        ref_model=None,  # PEFT: TRL copies the SFT adapter into a frozen "ref" adapter
+        args=DPOConfig(beta=spec.beta, **_common_args(spec, max_steps)),
+        train_dataset=dataset,
+        processing_class=tokenizer,
+        callbacks=[timer],
+    )
+    trainer.train(resume_from_checkpoint=_vol_path(resume_from) if resume_from else None)
+    t_trained = time.monotonic()
+    return _finish(trainer, tokenizer, spec, max_steps is not None, timer, t0, t_loaded, t_trained)
 
 
 def _verify_dataset(spec: JobSpec) -> str:
@@ -69,101 +256,44 @@ def _verify_dataset(spec: JobSpec) -> str:
     return path
 
 
-@app.function(image=image, gpu=_GPU, volumes={VOL: volume}, timeout=_TIMEOUT_S)
-def sft_train(spec_json: str, resume_from: str | None = None) -> dict:
-    from datasets import load_dataset
-    from peft import LoraConfig as PeftLoraConfig
-    from trl import SFTConfig, SFTTrainer
+def upload_datasets(*paths: str | Path) -> None:
+    """Upload local JSONL files to ``/vol/datasets/<name>`` (where :func:`sft_spec`/:func:`dpo_spec` point)."""
+    with volume.batch_upload(force=True) as batch:
+        for p in map(Path, paths):
+            batch.put_file(str(p), f"/datasets/{p.name}")
 
-    spec = JobSpec.model_validate(json.loads(spec_json))
-    if spec.kind != "sft":
-        raise ValueError("sft_train requires an sft spec")
-    volume.reload()
-    data_path = _verify_dataset(spec)
-    dataset = load_dataset("json", data_files=data_path, split="train")
-    dataset = dataset.remove_columns([c for c in dataset.column_names if c != "messages"])
 
-    model, tokenizer = _load_base(spec)
-    peft_config = PeftLoraConfig(
-        r=spec.lora.rank,
-        lora_alpha=spec.lora.alpha,
-        lora_dropout=spec.lora.dropout,
-        target_modules=list(spec.lora.target_modules),
-        task_type="CAUSAL_LM",
+def _cost_line(label: str, run: dict, rows_full: int, epochs: int, batch_size: int) -> str:
+    steady = run["step_s"][-1]  # step 1 carries CUDA warm-up
+    steps = -(-rows_full * epochs // batch_size)
+    seconds = run["load_s"] + steps * steady
+    return (
+        f"{label}: {steps} steps x {steady}s + {run['load_s']}s load = {seconds / 60:.0f} min"
+        f" ~ ${seconds * H100_USD_PER_S:.2f} (H100 at ${H100_USD_PER_S * 3600:.2f}/h)"
     )
-    args = SFTConfig(
-        output_dir=_vol_path(spec.checkpoint_dir),
-        num_train_epochs=spec.epochs,
-        learning_rate=spec.learning_rate,
-        per_device_train_batch_size=spec.batch_size,
-        max_seq_length=spec.max_seq_len,
-        seed=spec.seed,
-        bf16=True,
-        logging_steps=10,
-        save_strategy="steps",
-        save_steps=100,
-        save_total_limit=3,
-        report_to=[],
-    )
-    trainer = SFTTrainer(
-        model=model,
-        args=args,
-        train_dataset=dataset,
-        processing_class=tokenizer,
-        peft_config=peft_config,
-    )
-    trainer.train(resume_from_checkpoint=_vol_path(resume_from) if resume_from else None)
-    adapter_dir = _vol_path(f"adapters/{spec.name}")
-    trainer.model.save_pretrained(adapter_dir)
-    tokenizer.save_pretrained(adapter_dir)
-    volume.commit()
-    return {"adapter": adapter_dir}
 
 
-@app.function(image=image, gpu=_GPU, volumes={VOL: volume}, timeout=_TIMEOUT_S)
-def dpo_train(spec_json: str, resume_from: str | None = None) -> dict:
-    from datasets import load_dataset
-    from peft import PeftModel
-    from trl import DPOConfig, DPOTrainer
+@app.local_entrypoint()
+def smoke(data_dir: str, base_model: str = BASE_MODEL, rows: int = 16, steps: int = 2, dpo: bool = True) -> None:
+    """Upload data, prefetch weights, run ``steps`` SFT (+ DPO) steps on ``rows`` rows, print an estimate."""
+    from daypart.train.modal_jobs import dpo_spec, sft_spec
 
-    spec = JobSpec.model_validate(json.loads(spec_json))
-    if spec.kind != "dpo" or not spec.init_adapter or spec.beta is None:
-        raise ValueError("dpo_train requires a dpo spec with init_adapter and beta")
-    volume.reload()
-    data_path = _verify_dataset(spec)
-    dataset = load_dataset("json", data_files=data_path, split="train")
-    dataset = dataset.remove_columns([c for c in dataset.column_names if c not in ("prompt", "chosen", "rejected")])
-
-    base, tokenizer = _load_base(spec)
-    model = PeftModel.from_pretrained(base, _vol_path(spec.init_adapter), is_trainable=True)
-    args = DPOConfig(
-        output_dir=_vol_path(spec.checkpoint_dir),
-        beta=spec.beta,
-        num_train_epochs=spec.epochs,
-        learning_rate=spec.learning_rate,
-        per_device_train_batch_size=spec.batch_size,
-        max_length=spec.max_seq_len,
-        seed=spec.seed,
-        bf16=True,
-        logging_steps=10,
-        save_strategy="steps",
-        save_steps=100,
-        save_total_limit=3,
-        report_to=[],
-    )
-    trainer = DPOTrainer(
-        model=model,
-        ref_model=None,  # PEFT: the frozen base (adapter disabled) is the reference
-        args=args,
-        train_dataset=dataset,
-        processing_class=tokenizer,
-    )
-    trainer.train(resume_from_checkpoint=_vol_path(resume_from) if resume_from else None)
-    adapter_dir = _vol_path(f"adapters/{spec.name}")
-    trainer.model.save_pretrained(adapter_dir)
-    tokenizer.save_pretrained(adapter_dir)
-    volume.commit()
-    return {"adapter": adapter_dir}
+    t0 = time.monotonic()
+    sft_path, dpo_path = Path(data_dir) / "sft.jsonl", Path(data_dir) / "dpo.jsonl"
+    upload_datasets(sft_path, dpo_path)
+    print("prefetch:", prefetch_base.remote(base_model))
+    sft = sft_spec(base_model, sft_path)
+    out = sft_train.remote(sft.model_dump_json(), None, steps, rows)
+    print("sft smoke:", json.dumps(out, indent=1))
+    results = [("SFT", out, sum(1 for _ in sft_path.open()), sft)]
+    if dpo:
+        spec = dpo_spec(base_model, dpo_path, out["adapter"])
+        out = dpo_train.remote(spec.model_dump_json(), None, steps, rows)
+        print("dpo smoke:", json.dumps(out, indent=1))
+        results.append(("DPO", out, sum(1 for _ in dpo_path.open()), spec))
+    print(f"smoke wall clock: {time.monotonic() - t0:.0f}s (Modal billing: dashboard usage for app {APP_NAME})")
+    for label, run, n, spec in results:
+        print("estimate", _cost_line(label, run, n, spec.epochs, spec.batch_size))
 
 
 class ModalSdkBackend:
@@ -213,4 +343,16 @@ class ModalSdkBackend:
         return PollResult("succeeded", checkpoint=self._latest_checkpoint(call_id), adapter=adapter)
 
 
-__all__ = ["APP_NAME", "ModalSdkBackend", "app", "dpo_train", "sft_train", "volume"]
+__all__ = [
+    "APP_NAME",
+    "BASE_MODEL",
+    "ModalSdkBackend",
+    "app",
+    "dpo_train",
+    "hf_cache",
+    "prefetch_base",
+    "sft_train",
+    "smoke",
+    "upload_datasets",
+    "volume",
+]
