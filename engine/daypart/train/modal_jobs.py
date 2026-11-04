@@ -229,6 +229,23 @@ class JobRunner:
         return JobResult("failed", None, attempts, tuple(call_ids), tuple(errors))
 
 
+#: Decoder layers of the text tower inside a ``MuseGlimmerForConditionalGeneration`` checkpoint.
+LANGUAGE_TOWER_LAYERS = "model.language_model.layers"
+_MODULE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def language_lora_targets(target_modules: tuple[str, ...], *, prefix: str = LANGUAGE_TOWER_LAYERS) -> str:
+    """PEFT ``target_modules`` regex that matches ``target_modules`` in the language tower only.
+
+    The vision tower also has ``q_proj``/``k_proj``/``v_proj``, so bare names would put
+    LoRA on it too. PEFT full-matches a string ``target_modules`` against module names.
+    """
+    if not target_modules or not all(_MODULE_NAME.match(m) for m in target_modules):
+        raise ValueError(f"target_modules must be plain module names, got {target_modules!r}")
+    names = "|".join(re.escape(m) for m in target_modules)
+    return rf"{re.escape(prefix)}\.\d+\.(?:self_attn|mlp)\.(?:{names})"
+
+
 def plan_pipeline(
     base_model: str, sft_dataset: str | os.PathLike, dpo_dataset: str | os.PathLike
 ) -> tuple[JobSpec, Callable[[str], JobSpec]]:
@@ -247,10 +264,12 @@ __all__ = [
     "JobRunner",
     "JobSpec",
     "JobStatus",
+    "LANGUAGE_TOWER_LAYERS",
     "LoraConfig",
     "ModalBackend",
     "PollResult",
     "dpo_spec",
+    "language_lora_targets",
     "plan_pipeline",
     "sft_spec",
 ]
