@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -54,25 +54,54 @@ def _dpo_pairs(cohort: Cohort) -> list[dict]:
     return build_pairs(contexts, TemplateClient())
 
 
+def _eval_scenarios(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
+    """Every scenario the default ``runs.yaml`` env_baseline arms build for this cohort (all seeds)."""
+    # lazy: daypart.eval imports this module (i1_gate arm) — no import cycle
+    from daypart.eval import arm_scenarios, load_runs
+
+    config = load_runs()
+    return [
+        s.model_dump(mode="json")
+        for arm in config.arms
+        if arm.kind == "env_baseline"
+        for s in arm_scenarios(arm, cohort)
+    ]
+
+
 #: name -> builder(cohort) -> training rows. Add every new dataset builder (2.1 SFT, 2.3 DPO, ...).
 BUILDERS: dict[str, Callable[[Cohort], Iterable[Mapping[str, Any]]]] = {
     "simmember.training_profiles": _training_profiles,
     "simmember.training_trajectories": _training_trajectories,
     "train.sft_dataset": _sft_dataset,
     "train.dpo_pairs": _dpo_pairs,
+    "eval.scenarios": _eval_scenarios,
 }
 
 
-def main(seed: int = 0) -> int:
+def _check(seed: int) -> Iterator[tuple[str, CuratedLeakError | None]]:
+    """Yield ``(builder name, leak or None)`` for every registered builder, in order."""
     cohort = generate(seed)
     with tempfile.TemporaryDirectory() as tmp:
         write(cohort, Path(tmp))
         manifest = verify_manifest(Path(tmp))
-    failed = False
     for name, build in BUILDERS.items():
         try:
             assert_no_curated(build(cohort), manifest)
         except CuratedLeakError as exc:
+            yield name, exc
+        else:
+            yield name, None
+
+
+def results(seed: int = 0) -> dict[str, str]:
+    """Builder name -> ``"ok"`` | ``"fail"``; one entry per ``BUILDERS`` key."""
+    return {name: ("fail" if exc is not None else "ok") for name, exc in _check(seed)}
+
+
+def main(seed: int = 0) -> int:
+    failed = False
+    for name, exc in _check(seed):
+        if exc is not None:
             failed = True
             print(f"I1 FAIL {name}: {exc}", file=sys.stderr)
         else:

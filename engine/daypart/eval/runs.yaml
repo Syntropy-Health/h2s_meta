@@ -1,0 +1,42 @@
+# Default eval runs config (CONTRACT slice E, E1.1). Every arm is reported (G2).
+version: eval-v1
+cohort_seed: 0
+arms:
+  - name: r2_boundary_dsl
+    kind: r2_dsl
+    corpus: tests/sealed/data/r2_corpus_v1.jsonl
+  - name: env_always_none
+    kind: env_baseline
+    policy: always_none
+    n_scenarios: 50
+    seeds: [0, 1, 2]
+    horizon: 14
+  - name: env_always_barrier_problem_solving
+    kind: env_baseline
+    policy: always_barrier_problem_solving
+    n_scenarios: 50
+    seeds: [0, 1, 2]
+    horizon: 14
+  - name: env_random_intent
+    kind: env_baseline
+    policy: random_intent
+    n_scenarios: 50
+    seeds: [0, 1, 2]
+    horizon: 14
+  - name: i1_gate
+    kind: i1_gate
+  - name: sft
+    kind: not_run
+    reason: "needs a Fireworks key (G6) and the SFT dataset (2.1), which is not built"
+  - name: dpo
+    kind: not_run
+    reason: "needs a Fireworks key (G6) and the DPO pairs (2.3), which are not built"
+  - name: grpo
+    kind: not_run
+    reason: "needs a trained reward model (4.2) and policy (4.3), neither built"
+  - name: rm
+    kind: not_run
+    reason: "reward model (4.2) is not built"
+  - name: jev
+    kind: not_run
+    reason: "Jev question library (4.1) is not built"
