@@ -203,6 +203,7 @@
       "kind": "i1_gate",
       "metrics": {
         "builders": {
+          "eval.boundary_prompts": "ok",
           "eval.scenarios": "ok",
           "simmember.training_profiles": "ok",
           "simmember.training_trajectories": "ok",
@@ -216,17 +217,24 @@
       "status": "ok"
     },
     {
-      "kind": "not_run",
+      "kind": "boundary_eval",
       "metrics": null,
-      "name": "sft",
-      "reason": "needs a Fireworks key (G6) and the SFT dataset (2.1), which is not built",
+      "name": "base",
+      "reason": "missing boundary_eval.json in the results directory; run `modal run daypart/train/modal_app.py::boundary_eval` and commit the output",
       "status": "not_run"
     },
     {
-      "kind": "not_run",
+      "kind": "boundary_eval",
+      "metrics": null,
+      "name": "sft",
+      "reason": "missing boundary_eval.json in the results directory; run `modal run daypart/train/modal_app.py::boundary_eval` and commit the output",
+      "status": "not_run"
+    },
+    {
+      "kind": "boundary_eval",
       "metrics": null,
       "name": "dpo",
-      "reason": "needs a Fireworks key (G6) and the DPO pairs (2.3), which are not built",
+      "reason": "missing boundary_eval.json in the results directory; run `modal run daypart/train/modal_app.py::boundary_eval` and commit the output",
       "status": "not_run"
     },
     {
@@ -257,12 +265,12 @@
     "valence": "valence-v2"
   },
   "rule_version": "boundary-v1",
-  "runs_digest": "396231b5eebc974893aae9537663695ed2ed845ecf65d3394c4befbf3976af94",
+  "runs_digest": "71c12e33859c60ddf829cf9a9dcbad3bde15643ce85f4c1aca822d9cc528cd7b",
   "runs_version": "eval-v1",
   "schema": "daypart-metrics/v1",
   "summary": {
     "failed": 0,
-    "not_run": 5,
+    "not_run": 6,
     "ok": 5
   }
 }
