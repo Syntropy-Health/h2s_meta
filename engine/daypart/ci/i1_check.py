@@ -39,11 +39,42 @@ def _eval_scenarios(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
     ]
 
 
+_I1_MEMBERS = 12  # small fixed set of training members (<= 20) keeps the gate fast
+
+
+def _realized_cache(cohort: Cohort, tmp: Path):
+    from daypart.simmember.narrative import NarrativeCache, TemplateClient, realize
+
+    cache = NarrativeCache(tmp / "narrative.jsonl")
+    client = TemplateClient()
+    for profile in cohort.training_profiles()[:_I1_MEMBERS]:
+        realize(profile, cohort.trajectories[profile.member_id], client, cache)
+    return cache
+
+
+def _sft_dataset(cohort: Cohort) -> list[dict]:
+    from daypart.train.sft_dataset import build_sft
+
+    with tempfile.TemporaryDirectory() as tmp:
+        return build_sft(cohort, _realized_cache(cohort, Path(tmp)))
+
+
+def _dpo_pairs(cohort: Cohort) -> list[dict]:
+    from daypart.simmember.narrative import TemplateClient
+    from daypart.train.dpo_pairs import build_pairs, make_contexts
+
+    with tempfile.TemporaryDirectory() as tmp:
+        contexts = make_contexts(cohort, _realized_cache(cohort, Path(tmp)), max_members=_I1_MEMBERS)
+    return build_pairs(contexts, TemplateClient())
+
+
 #: name -> builder(cohort) -> training rows. Add every new dataset builder (2.1 SFT, 2.3 DPO, ...).
 BUILDERS: dict[str, Callable[[Cohort], Iterable[Mapping[str, Any]]]] = {
     "simmember.training_profiles": _training_profiles,
     "simmember.training_trajectories": _training_trajectories,
     "eval.scenarios": _eval_scenarios,
+    "train.sft_dataset": _sft_dataset,
+    "train.dpo_pairs": _dpo_pairs,
 }
 
 
