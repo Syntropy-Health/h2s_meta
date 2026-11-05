@@ -428,7 +428,7 @@ def boundary_eval(
     gen = boundary_generate.remote(
         json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed
     )
-    scored = {m: [score_response(p, t) for p, t in zip(prompts, gen["responses"][m])] for m in ("base", "sft", "dpo")}
+    scored = {m: [score_response(p, t) for p, t in zip(prompts, gen["responses"][m], strict=True)] for m in ("base", "sft", "dpo")}
     meta = {
         "base_model": base_model,
         "adapters": adapters,
