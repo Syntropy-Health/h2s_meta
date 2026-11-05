@@ -158,6 +158,60 @@ def _run_i1_gate(config: RunsConfig) -> dict:
 
 
 # --------------------------------------------------------------------------- #
+# boundary_eval (2.4: base / SFT / DPO, read from committed results files)
+# --------------------------------------------------------------------------- #
+
+BOUNDARY_FILE = "boundary_eval.json"
+TRAINING_FILE = "training.json"
+RESULTS_DIR_ENV = "DAYPART_RESULTS_DIR"
+
+
+class _NotRun(Exception):
+    """An arm whose inputs do not exist yet (reported as ``not_run``, never ``failed``)."""
+
+
+def _results_dir(arm: ArmConfig, root: pathlib.Path) -> pathlib.Path:
+    env = os.environ.get(RESULTS_DIR_ENV)
+    d = pathlib.Path(env if env else (arm.results or ""))
+    return d if d.is_absolute() else root / d
+
+
+def _run_boundary_eval(arm: ArmConfig, root: pathlib.Path) -> dict:
+    from daypart.eval.boundary import load_report
+    from daypart.train.results import training_summary
+
+    d = _results_dir(arm, root)
+    needed = [BOUNDARY_FILE] + ([TRAINING_FILE] if arm.model in ("sft", "dpo") else [])
+    missing = [f for f in needed if not (d / f).is_file()]
+    if missing:
+        raise _NotRun(
+            f"missing {', '.join(missing)} in the results directory; run "
+            "`modal run daypart/train/modal_app.py::boundary_eval` and commit the output"
+        )
+    report = load_report(d / BOUNDARY_FILE)
+    model = report["models"].get(arm.model)
+    if model is None:
+        raise ValueError(f"{BOUNDARY_FILE} has no {arm.model!r} model")
+    metrics: dict[str, Any] = {
+        "model": arm.model,
+        "boundary": {k: v for k, v in model.items() if k != "responses"},
+        "prompt_set_version": report.get("prompt_set_version"),
+        "margin": report.get("margin"),
+    }
+    if arm.model in ("sft", "dpo"):
+        try:
+            record = json.loads((d / TRAINING_FILE).read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{TRAINING_FILE}: invalid JSON: {exc.msg}") from None
+        metrics["training"] = training_summary(record, arm.model)
+    if arm.model in ("base", "sft"):
+        metrics["r3"] = report.get("r3")
+    if arm.model == "dpo":
+        metrics["r4"] = report.get("r4")
+    return metrics
+
+
+# --------------------------------------------------------------------------- #
 # run / dumps / main
 # --------------------------------------------------------------------------- #
 
@@ -181,12 +235,15 @@ def _run_arm(arm: ArmConfig, config: RunsConfig, root: pathlib.Path) -> dict:
         "r2_dsl": lambda: _run_r2_dsl(arm, root),
         "env_baseline": lambda: _run_env_baseline(arm, config),
         "i1_gate": lambda: _run_i1_gate(config),
+        "boundary_eval": lambda: _run_boundary_eval(arm, root),
     }
     runner = runners.get(arm.kind)
     if runner is None:
         return _arm_result(arm, "failed", f"unknown arm kind {arm.kind!r}", None)
     try:
         metrics = runner()
+    except _NotRun as exc:
+        return _arm_result(arm, "not_run", str(exc), None)
     except Exception as exc:  # G2: a failing arm never aborts the run
         reason = _scrub(f"{type(exc).__name__}: {exc}", root)
         return _arm_result(arm, "failed", reason, None)

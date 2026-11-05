@@ -14,6 +14,11 @@ Base model: ``meta-models/Muse-Glimmer-30B`` (``MuseGlimmerForConditionalGenerat
 H100: LoRA sits on the language tower only (:func:`language_lora_targets`); the
 vision tower, adapter and projection stay frozen in bf16 and never run.
 
+2.4 boundary eval (base vs base+SFT vs base+DPO on held-out prompts, greedy, fixed seed);
+writes ``/vol/results/boundary_eval.json`` and a local copy to commit::
+
+    uv run --with modal modal run daypart/train/modal_app.py::boundary_eval --out ../docs/daypart/results/boundary_eval.json
+
 Smoke step (2 SFT steps on 16 rows, then 2 DPO steps on 16 pairs from that
 adapter), from ``engine/`` with Modal credentials::
 
@@ -296,6 +301,160 @@ def smoke(data_dir: str, base_model: str = BASE_MODEL, rows: int = 16, steps: in
         print("estimate", _cost_line(label, run, n, spec.epochs, spec.batch_size))
 
 
+SFT_ADAPTER = "adapters/daypart-sft-23866809bbd7"
+DPO_ADAPTER = "adapters/daypart-dpo-1e2af88136ca"
+
+
+@app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
+def boundary_generate(
+    prompts_json: str,
+    adapters_json: str,
+    base_model: str = BASE_MODEL,
+    max_new_tokens: int = 192,
+    batch_size: int = 16,
+    seed: int = 0,
+) -> dict:
+    """Greedy responses per model: ``base`` (adapters disabled) plus one per named adapter."""
+    import torch
+    from peft import PeftModel
+    from transformers import AutoModelForImageTextToText, AutoTokenizer, BitsAndBytesConfig
+
+    t0 = time.monotonic()
+    prompts = json.loads(prompts_json)
+    adapters: dict[str, str] = json.loads(adapters_json)
+    volume.reload()
+    torch.manual_seed(seed)
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
+    tokenizer.padding_side = "left"
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    quant = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        llm_int8_skip_modules=list(_KEEP_BF16),
+    )
+    base = AutoModelForImageTextToText.from_pretrained(
+        base_model, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0}
+    )
+    model = None
+    for name, path in adapters.items():
+        if model is None:
+            model = PeftModel.from_pretrained(base, _vol_path(path), adapter_name=name)
+        else:
+            model.load_adapter(_vol_path(path), adapter_name=name)
+    model = model if model is not None else base
+    model.eval()
+    model.config.get_text_config().use_cache = True
+    t_loaded = time.monotonic()
+
+    texts = [
+        tokenizer.apply_chat_template(p["messages"], tokenize=False, add_generation_prompt=True) for p in prompts
+    ]
+
+    def _generate() -> list[str]:
+        out: list[str] = []
+        for i in range(0, len(texts), batch_size):
+            enc = tokenizer(texts[i : i + batch_size], return_tensors="pt", padding=True, add_special_tokens=False)
+            enc = {k: v.to(0) for k, v in enc.items()}
+            with torch.no_grad():
+                ids = model.generate(
+                    **enc, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=tokenizer.pad_token_id
+                )
+            new = ids[:, enc["input_ids"].shape[1] :]
+            out += [t.strip() for t in tokenizer.batch_decode(new, skip_special_tokens=True)]
+        return out
+
+    responses: dict[str, list[str]] = {}
+    gen_s: dict[str, float] = {}
+    for name in ["base", *adapters]:
+        t = time.monotonic()
+        if name == "base" and adapters:
+            with model.disable_adapter():
+                responses[name] = _generate()
+        else:
+            if name != "base":
+                model.set_adapter(name)
+            responses[name] = _generate()
+        gen_s[name] = round(time.monotonic() - t, 1)
+    return {
+        "responses": responses,
+        "load_s": round(t_loaded - t0, 1),
+        "gen_s": gen_s,
+        "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 1),
+    }
+
+
+def _volume_jsonl(path: str) -> list[dict]:
+    try:
+        data = b"".join(volume.read_file(path))
+    except Exception as exc:  # FileNotFoundError surfaces under several Modal error types
+        raise SystemExit(f"cannot read {path} from volume {VOLUME_NAME}: {exc}") from exc
+    return [json.loads(line) for line in data.decode("utf-8").splitlines() if line.strip()]
+
+
+@app.local_entrypoint()
+def boundary_eval(
+    out: str = "boundary_eval.json",
+    max_prompts: int = 300,
+    max_new_tokens: int = 192,
+    batch_size: int = 16,
+    seed: int = 0,
+    sft_adapter: str = SFT_ADAPTER,
+    dpo_adapter: str = DPO_ADAPTER,
+    base_model: str = BASE_MODEL,
+    dry_run: bool = False,
+) -> None:
+    """2.4: held-out prompts (I1-gated), greedy base/SFT/DPO generation on one H100, R3/R4 report."""
+    import io
+
+    from daypart.eval.boundary import build_report, cost_estimate, heldout_prompts, score_response, training_user_turns
+    from daypart.simmember.cohort import generate
+
+    training = _volume_jsonl("datasets/sft.jsonl") + _volume_jsonl("datasets/dpo.jsonl")
+    exclude = training_user_turns(training)
+    prompts = heldout_prompts(generate(0), max_prompts=max_prompts, exclude_user_turns=exclude)
+    est = cost_estimate(len(prompts), batch_size=batch_size, max_new_tokens=max_new_tokens, usd_per_s=H100_USD_PER_S)
+    print(
+        f"boundary_eval: {len(prompts)} held-out prompts x 3 models ({len(exclude)} training user turns excluded);"
+        f" expected ~{est['seconds'] / 60:.0f} min on one H100 ~ ${est['usd']:.2f}"
+        f" (H100 at ${H100_USD_PER_S * 3600:.2f}/h, {est['batches']} batches of {batch_size} x {max_new_tokens} tokens)"
+    )
+    if dry_run:
+        return
+    adapters = {"sft": sft_adapter, "dpo": dpo_adapter}
+    gen = boundary_generate.remote(
+        json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed
+    )
+    scored = {m: [score_response(p, t) for p, t in zip(prompts, gen["responses"][m])] for m in ("base", "sft", "dpo")}
+    meta = {
+        "base_model": base_model,
+        "adapters": adapters,
+        "seed": seed,
+        "decoding": "greedy",
+        "max_new_tokens": max_new_tokens,
+        "n_prompts": len(prompts),
+        "n_excluded_training_turns": len(exclude),
+        "load_s": gen["load_s"],
+        "gen_s": gen["gen_s"],
+        "peak_gpu_gb": gen["peak_gpu_gb"],
+        "estimate": est,
+    }
+    report = build_report(scored, meta=meta)
+    text = json.dumps(report, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
+    with volume.batch_upload(force=True) as batch:
+        batch.put_file(io.BytesIO(text.encode("utf-8")), "/results/boundary_eval.json")
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    Path(out).write_text(text, encoding="utf-8")
+    for m in ("base", "sft", "dpo"):
+        agg = report["models"][m]
+        print(f"{m:>4}: boundary {agg['boundary_pass_rate']:.3f}  rubric {agg['rubric_pass_rate']:.3f}  n={agg['n']}")
+    print("R3:", json.dumps(report["r3"]))
+    print("R4:", json.dumps(report["r4"]))
+    print(f"wrote {out} and {VOLUME_NAME}:/results/boundary_eval.json")
+
+
 class ModalSdkBackend:
     """:class:`~daypart.train.modal_jobs.ModalBackend` over the deployed ``daypart-train`` app."""
 
@@ -348,6 +507,8 @@ __all__ = [
     "BASE_MODEL",
     "ModalSdkBackend",
     "app",
+    "boundary_eval",
+    "boundary_generate",
     "dpo_train",
     "hf_cache",
     "prefetch_base",

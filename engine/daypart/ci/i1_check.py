@@ -39,6 +39,13 @@ def _eval_scenarios(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
     ]
 
 
+def _eval_boundary_prompts(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
+    """The held-out 2.4 boundary-eval prompts (default arguments)."""
+    from daypart.eval.boundary import heldout_prompts
+
+    return heldout_prompts(cohort)
+
+
 _I1_MEMBERS = 12  # small fixed set of training members (<= 20) keeps the gate fast
 
 
@@ -73,6 +80,7 @@ BUILDERS: dict[str, Callable[[Cohort], Iterable[Mapping[str, Any]]]] = {
     "simmember.training_profiles": _training_profiles,
     "simmember.training_trajectories": _training_trajectories,
     "eval.scenarios": _eval_scenarios,
+    "eval.boundary_prompts": _eval_boundary_prompts,
     "train.sft_dataset": _sft_dataset,
     "train.dpo_pairs": _dpo_pairs,
 }

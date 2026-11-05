@@ -107,4 +107,89 @@ def env_rows(doc: MetricsDoc) -> list[dict[str, Any]]:
     return rows
 
 
-__all__ = ["Arm", "MetricsDoc", "MetricsFileError", "REGEN_HINT", "default_metrics_path", "env_rows", "load_metrics"]
+# --------------------------------------------------------------------------- #
+# 2.4 training panel + base/SFT/DPO boundary table (CONTRACT slice G4)
+# --------------------------------------------------------------------------- #
+
+RESULTS_DIR_ENV = "DAYPART_RESULTS_DIR"
+
+
+def results_dir(metrics_path: str | os.PathLike) -> Path:
+    """``$DAYPART_RESULTS_DIR`` if set, else the directory holding ``metrics_path``."""
+    env = os.environ.get(RESULTS_DIR_ENV)
+    return Path(env) if env else Path(metrics_path).parent
+
+
+def _read_json(p: Path) -> Any | None:
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError) as exc:
+        raise MetricsFileError(f"cannot read {p.name}: {exc}") from None
+
+
+def load_training(directory: str | os.PathLike) -> dict | None:
+    """``training.json`` (the Modal SFT/DPO run record), or None when not committed."""
+    data = _read_json(Path(directory) / "training.json")
+    if data is not None and not isinstance(data, dict):
+        raise MetricsFileError("training.json must be a JSON object")
+    return data
+
+
+def load_boundary(directory: str | os.PathLike) -> dict | None:
+    """``boundary_eval.json`` (the 2.4 base/SFT/DPO eval), or None when not committed."""
+    from daypart.eval.boundary import load_report
+
+    try:
+        return load_report(Path(directory) / "boundary_eval.json")
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError) as exc:
+        raise MetricsFileError(str(exc)) from None
+
+
+def training_rows(record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    from daypart.train.results import STAGES, training_summary
+
+    return [{"stage": s, **training_summary(record, s)} for s in STAGES if s in record]
+
+
+def loss_rows(record: Mapping[str, Any]) -> list[dict[str, Any]]:
+    from daypart.train.results import STAGES, loss_curve
+
+    return [{"stage": s, **pt} for s in STAGES if s in record for pt in loss_curve(record, s)]
+
+
+def boundary_rows(report: Mapping[str, Any]) -> list[dict[str, Any]]:
+    from daypart.eval.models import EVAL_MODELS
+
+    models = report.get("models") or {}
+    return [
+        {
+            "model": m,
+            "n": models[m]["n"],
+            "boundary_pass_rate": models[m]["boundary_pass_rate"],
+            "rubric_pass_rate": models[m]["rubric_pass_rate"],
+            "violations": sum((models[m].get("violations_by_rule") or {}).values()),
+        }
+        for m in EVAL_MODELS
+        if m in models
+    ]
+
+
+__all__ = [
+    "Arm",
+    "MetricsDoc",
+    "MetricsFileError",
+    "REGEN_HINT",
+    "boundary_rows",
+    "default_metrics_path",
+    "env_rows",
+    "load_boundary",
+    "load_metrics",
+    "load_training",
+    "loss_rows",
+    "results_dir",
+    "training_rows",
+]

@@ -39,7 +39,7 @@ image = image.run_commands(
     f"mkdir -p {RESULTS} && cp -r /app/results_src/. {RESULTS}/",
     # Fresh harness run unless a committed metrics.json exists. Exit code 1 = some arm failed;
     # the document is still written and the dashboard shows the failure with its reason.
-    f"cd /app && (test -f {RESULTS}/metrics.json || python -m daypart.eval --out {RESULTS}/metrics.json || test -f {RESULTS}/metrics.json)",
+    f"cd /app && (test -f {RESULTS}/metrics.json || DAYPART_RESULTS_DIR={RESULTS} python -m daypart.eval --out {RESULTS}/metrics.json || test -f {RESULTS}/metrics.json)",
 ).env({"DAYPART_RESULTS_DIR": RESULTS})
 
 app = modal.App(APP_NAME, image=image)
