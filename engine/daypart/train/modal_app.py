@@ -43,7 +43,7 @@ from pathlib import Path, PurePosixPath
 
 import modal
 
-from daypart.train.modal_jobs import JobSpec, PollResult, language_lora_targets
+from daypart.train.modal_jobs import JobSpec, PollResult, dpo_loss_kwargs, language_lora_targets
 
 APP_NAME = "daypart-train"
 VOLUME_NAME = "daypart-train"
@@ -228,13 +228,6 @@ def sft_train(
     return _finish(trainer, tokenizer, spec, max_steps is not None, timer, t0, t_loaded, t_trained)
 
 
-def _dpo_loss(spec: JobSpec) -> dict:
-    """``rpo_alpha`` as TRL 1.17 spells it: sigmoid DPO plus a weighted SFT (NLL on chosen) term."""
-    if not spec.rpo_alpha:
-        return {"loss_type": ["sigmoid"]}
-    return {"loss_type": ["sigmoid", "sft"], "loss_weights": [1.0, spec.rpo_alpha]}
-
-
 @app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
 def dpo_train(
     spec_json: str, resume_from: str | None = None, max_steps: int | None = None, max_rows: int | None = None
@@ -256,7 +249,7 @@ def dpo_train(
     trainer = DPOTrainer(
         model=model,
         ref_model=None,  # PEFT: TRL copies the SFT adapter into a frozen "ref" adapter
-        args=DPOConfig(beta=spec.beta, **_dpo_loss(spec), **_common_args(spec, max_steps)),
+        args=DPOConfig(beta=spec.beta, **dpo_loss_kwargs(spec), **_common_args(spec, max_steps)),
         train_dataset=dataset,
         processing_class=tokenizer,
         callbacks=[timer],
@@ -318,19 +311,25 @@ def smoke(data_dir: str, base_model: str = BASE_MODEL, rows: int = 16, steps: in
 
 
 TRAINING_RECORD = "results/training.json"
+#: Below this many SFT rows or DPO pairs, ``train`` refuses to spend GPU time (one DPO batch is 8 pairs).
+MIN_TRAIN_ROWS = 32
 
 
-@app.function(image=image, volumes=_VOLUMES, cpu=1, memory=2048, timeout=_TIMEOUT_S)
+@app.function(image=image, volumes=_VOLUMES, cpu=1, memory=2048, timeout=2 * _TIMEOUT_S)
 def train_pipeline(sft_json: str, dpo_json: str) -> dict:
     """SFT, then DPO from that adapter; writes ``/vol/results/training.json``. Spawn it on the deployed app."""
-    sft = sft_train.remote(sft_json)
-    dpo = dpo_train.remote(dpo_json)
-    record = {"sft": sft, "dpo": dpo}
-    volume.reload()
     path = Path(_vol_path(TRAINING_RECORD))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-    volume.commit()
+
+    def _write(record: dict) -> None:  # after each stage, so a DPO failure keeps the SFT record
+        volume.reload()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        volume.commit()
+
+    record = {"sft": sft_train.remote(sft_json)}
+    _write(record)
+    record["dpo"] = dpo_train.remote(dpo_json)
+    _write(record)
     return record
 
 
@@ -350,7 +349,9 @@ def train(data_dir: str, base_model: str = BASE_MODEL, dry_run: bool = False) ->
     sft_path, dpo_path = data / "sft.jsonl", data / "dpo.jsonl"
     sft = sft_spec(base_model, sft_path)
     dpo = dpo_spec(base_model, dpo_path, f"adapters/{sft.name}")
-    n_sft, n_dpo = (sum(1 for _ in p.open()) for p in (sft_path, dpo_path))
+    n_sft, n_dpo = (len(p.read_text(encoding="utf-8").splitlines()) for p in (sft_path, dpo_path))
+    if n_sft < MIN_TRAIN_ROWS or n_dpo < MIN_TRAIN_ROWS:
+        raise SystemExit(f"train: need >= {MIN_TRAIN_ROWS} SFT rows and DPO pairs, got {n_sft} and {n_dpo}")
     print(f"train: {n_sft} SFT rows -> adapters/{sft.name}; {n_dpo} DPO pairs -> adapters/{dpo.name}")
     print(f"  dpo: beta {dpo.beta}, lr {dpo.learning_rate}, rpo_alpha {dpo.rpo_alpha}; data from {summary['model_id']}")
     if dry_run:

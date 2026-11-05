@@ -148,6 +148,15 @@ def dpo_spec(
     )
 
 
+def dpo_loss_kwargs(spec: JobSpec) -> dict:
+    """``DPOConfig`` loss kwargs: ``rpo_alpha`` as TRL 1.17 spells it (sigmoid DPO + weighted SFT on chosen)."""
+    if spec.kind != "dpo":
+        raise ValueError("dpo_loss_kwargs needs a dpo spec")
+    if not spec.rpo_alpha:
+        return {"loss_type": ["sigmoid"]}
+    return {"loss_type": ["sigmoid", "sft"], "loss_weights": [1.0, spec.rpo_alpha]}
+
+
 class TemplateDataError(ValueError):
     """The datasets were realized by the offline ``TemplateClient``, not a language model."""
 
@@ -302,6 +311,7 @@ __all__ = [
     "PollResult",
     "TemplateDataError",
     "check_trainable",
+    "dpo_loss_kwargs",
     "dpo_spec",
     "language_lora_targets",
     "plan_pipeline",

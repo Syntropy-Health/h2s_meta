@@ -19,6 +19,7 @@ from daypart.train.modal_jobs import (
     JobSpec,
     TemplateDataError,
     check_trainable,
+    dpo_loss_kwargs,
     dpo_spec,
     sft_spec,
 )
@@ -160,6 +161,18 @@ def test_rpo_alpha_is_part_of_the_spec_hash(data):
     a = dpo_spec("org/glimmer", data, "adapters/x")
     assert dpo_spec("org/glimmer", data, "adapters/x", rpo_alpha=0.5).spec_hash != a.spec_hash
     assert sft_spec("org/glimmer", data).rpo_alpha is None
+
+
+def test_dpo_loss_kwargs_trl_1_17(data):
+    # TRL 1.17 DPOConfig has no rpo_alpha field: RPO is loss_type sigmoid + sft with weights.
+    d = dpo_spec("org/glimmer", data, "adapters/x")
+    assert dpo_loss_kwargs(d) == {"loss_type": ["sigmoid", "sft"], "loss_weights": [1.0, 1.0]}
+    assert dpo_loss_kwargs(dpo_spec("org/glimmer", data, "adapters/x", rpo_alpha=0.5))["loss_weights"] == [1.0, 0.5]
+    for off in (None, 0.0):
+        kw = dpo_loss_kwargs(dpo_spec("org/glimmer", data, "adapters/x", rpo_alpha=off))
+        assert kw == {"loss_type": ["sigmoid"]} and "rpo_alpha" not in kw
+    with pytest.raises(ValueError):
+        dpo_loss_kwargs(sft_spec("org/glimmer", data))
 
 
 # ---------------------------------------------------------------- template-data guard
