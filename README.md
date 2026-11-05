@@ -111,15 +111,25 @@ Choosing the intent matters: problem-solving the barrier beats no contact by +0.
 
 | Stage | Data | Steps | Wall time | Peak GPU | Result |
 |---|---|---|---|---|---|
-| SFT | 4,072 boundary-clean chat rows, 2 epochs | 1,018 | 12.3 min | 19.9 GB | train loss 0.084, token accuracy 0.98 |
-| DPO | 308 lapse-recovery preference pairs, 2 epochs | 78 | 2.1 min | 21.2 GB | train loss 0.59, chosen-vs-rejected reward margin 0.96 |
+| SFT | 4,040 boundary-clean chat rows realized by Muse Spark (175 synthetic members), 2 epochs | 1,010 | 14.2 min | 20.4 GB | train loss 0.26 |
+| DPO | 84 lapse-recovery preference pairs (kept only where the rejected reply fails the DSL or rubric), 2 epochs, lr 1e-5 with an SFT anchor | 22 | 1.0 min | 22.8 GB | train loss 1.90, reward accuracy 1.0, chosen-vs-rejected margin 0.50 |
 
-Total GPU cost was about $1.
+Data cost about $8 of Muse calls; GPU cost was about $3 including the eval. Run record: `docs/daypart/results/{pipeline,training,boundary_eval,metrics}.json` (Modal call `fc-01M6NCNYPXQXDFKXFVZ8GN4TPX`).
+
+**Held-out eval** (141 prompts: 90 boundary probes, 51 check-ins; greedy, 512 new tokens; a response that is empty or leaks markup fails both checks):
+
+| Model | Boundary pass | Rubric pass | Degenerate | Distinct replies |
+|---|---|---|---|---|
+| Base | 0.319 | 0.106 | 90 (empty) | 52 |
+| SFT | **1.000** | 0.624 | 0 | 58 |
+| DPO | **1.000** | **0.645** | 0 | 54 |
+
+R3 (SFT beats base on boundary by at least 0.05 at rubric parity) passes. R4 (DPO improves rubric with no boundary regression) passes, by a small margin: +0.021, which is 6 prompts won and 3 lost.
 
 **Boundary DSL:** 100% recall with a false-positive rate under 2% on the sealed membrane test set (plan task 1.2).
 
-**Not yet measured, stated plainly:**
-- *Base vs SFT vs DPO boundary compliance and lapse-recovery quality on held-out prompts* (R3/R4) is in progress. Until it lands, the harness reports those arms as `not_run`. SFT data comes from an offline template realizer, so the low SFT loss reflects learning that style and boundary, not open-ended quality.
+**Caveats and gaps, stated plainly:**
+- *How to read R3/R4.* Base spends most of its 512 tokens reasoning: 90 of 141 replies never reach the user channel and score as empty. On the 51 prompts where base does answer, it passes boundary 0.88 and rubric 0.29; SFT passes 1.00 and 0.78 and DPO 1.00 and 0.90 on the same prompts. The DPO gain is small and rests on 84 pairs. Replies are short (about 29 words) and repeat: the top refusal accounts for 22–25 of the 90 probes. Check-in rubric stays low (about 0.12–0.14) for every model, mostly on the invitation check. Base greedy output is not bit-reproducible across calls (batched 4-bit kernels).
 - *R2 boundary corpus arm* reports `failed` until the sealed corpus file is written (HAC-23).
 - *GRPO policy, reward model, Jev question library* are designed but not built for this submission.
 
