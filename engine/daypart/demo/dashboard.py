@@ -9,13 +9,14 @@ from __future__ import annotations
 import argparse
 import sys
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 from daypart.demo.dashboard_data import MetricsFileError, default_metrics_path, env_rows, load_metrics
 
 SERIES = "#2a78d6"  # single-series bars: one hue, no legend
-STATUS_ICON = {"ok": "✅ ok", "not_run": "⏸️ not run", "failed": "❌ failed"}
+STATUS_LABEL = {"ok": "ok", "not_run": "not run", "failed": "FAILED"}
 
 
 def _args() -> argparse.Namespace:
@@ -49,22 +50,30 @@ def main() -> None:
 
     st.subheader("All arms")
     table = pd.DataFrame(doc.arm_table())
-    table["status"] = table["status"].map(STATUS_ICON)
+    table["status"] = table["status"].map(STATUS_LABEL)
     st.dataframe(table, hide_index=True, use_container_width=True)
 
     rows = env_rows(doc)
     if rows:
         st.subheader("Environment baselines")
         env = pd.DataFrame(rows)
-        left, right = st.columns([3, 2])
-        with left:
-            st.caption("Mean adherence (fraction of simulated days logged), by policy")
-            st.bar_chart(env.set_index("policy")["mean_adherence"], color=SERIES, horizontal=True, height=220)
-        with right:
-            st.dataframe(
-                env[["policy", "mean_adherence", "episode_violation_rate", "mean_return", "n_scenarios", "horizon"]],
-                hide_index=True, use_container_width=True,
+        env["label"] = env["policy"].str.removeprefix("always_").str.replace("_", " ")
+        st.caption("Mean adherence (fraction of simulated days logged), by policy")
+        chart = (
+            alt.Chart(env)
+            .mark_bar(color=SERIES, cornerRadiusEnd=4)
+            .encode(
+                x=alt.X("mean_adherence:Q", title="mean adherence", scale=alt.Scale(domain=[0, 1])),
+                y=alt.Y("label:N", title=None, sort=None, axis=alt.Axis(labelLimit=180)),
+                tooltip=["policy", "mean_adherence", "episode_violation_rate", "mean_return"],
             )
+            .properties(height=44 * len(env) + 40)
+        )
+        st.altair_chart(chart, use_container_width=True)
+        st.dataframe(
+            env[["policy", "mean_adherence", "episode_violation_rate", "mean_return", "n_scenarios", "horizon"]],
+            hide_index=True, use_container_width=True,
+        )
 
     for a in doc.arms:
         if a.status != "ok":
