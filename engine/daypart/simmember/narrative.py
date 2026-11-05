@@ -56,10 +56,33 @@ class MissingCredentialsError(RuntimeError):
     """A required Muse environment variable is missing or empty (names only, never values)."""
 
 
-class MuseClient:
-    """OpenAI-compatible chat-completions client for Muse. Construction does no I/O."""
+class TruncatedResponseError(ValueError):
+    """The reply ran out of ``max_tokens`` before any content (reasoning used them all). Retry with more."""
 
-    def __init__(self, *, model_id: str | None = None, env: Mapping[str, str] | None = None) -> None:
+    def __init__(self, max_tokens: int) -> None:
+        super().__init__(f"Muse response truncated at max_tokens={max_tokens} with no content")
+        self.max_tokens = max_tokens
+
+
+#: Muse reasoning models spend ``max_tokens`` on reasoning first; "minimal" leaves room for the reply.
+DEFAULT_REASONING_EFFORT = "minimal"
+_UNSET: Any = object()
+
+
+class MuseClient:
+    """OpenAI-compatible chat-completions client for Muse. Construction does no I/O.
+
+    ``reasoning_effort`` (default ``MUSE_REASONING_EFFORT`` or ``"minimal"``; ``None`` omits it)
+    is sent with every request. ``last_usage`` holds the last response's token counts, if reported.
+    """
+
+    def __init__(
+        self,
+        *,
+        model_id: str | None = None,
+        env: Mapping[str, str] | None = None,
+        reasoning_effort: str | None = _UNSET,
+    ) -> None:
         source = os.environ if env is None else env
         required = ["MUSE_API_KEY", "MUSE_BASE_URL"]
         if model_id is None:
@@ -71,6 +94,10 @@ class MuseClient:
         self.base_url = str(source["MUSE_BASE_URL"]).rstrip("/")
         self.model_id = model_id if model_id is not None else str(source["MUSE_SPARK_MODEL"])
         self.timeout_s = 60.0
+        if reasoning_effort is _UNSET:
+            reasoning_effort = source.get("MUSE_REASONING_EFFORT") or DEFAULT_REASONING_EFFORT
+        self.reasoning_effort: str | None = reasoning_effort
+        self.last_usage: dict[str, int] | None = None
 
     def __repr__(self) -> str:
         return f"MuseClient(model_id={self.model_id!r}, base_url={self.base_url!r})"
@@ -83,15 +110,16 @@ class MuseClient:
         temperature: float = 0.7,
         max_tokens: int = 256,
     ) -> str:
-        body = json.dumps(
-            {
-                "model": self.model_id,
-                "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
-                "seed": int(seed),
-                "temperature": float(temperature),
-                "max_tokens": int(max_tokens),
-            }
-        ).encode("utf-8")
+        request: dict[str, Any] = {
+            "model": self.model_id,
+            "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+            "seed": int(seed),
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens),
+        }
+        if self.reasoning_effort is not None:
+            request["reasoning_effort"] = self.reasoning_effort
+        body = json.dumps(request).encode("utf-8")
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=body,
@@ -104,13 +132,27 @@ class MuseClient:
         )
         with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:  # noqa: S310 - fixed https base
             payload = json.loads(resp.read().decode("utf-8"))
+        self.last_usage = _usage(payload)
         try:
-            content = payload["choices"][0]["message"]["content"]
+            choice = payload["choices"][0]
+            content = choice["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise ValueError("Muse response has no choices[0].message.content") from exc
+        if not content and choice.get("finish_reason") == "length":
+            raise TruncatedResponseError(int(max_tokens))
         if not isinstance(content, str):
             raise ValueError("Muse response content is not a string")
         return content
+
+
+def _usage(payload: Any) -> dict[str, int] | None:
+    usage = payload.get("usage") if isinstance(payload, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    try:
+        return {"prompt_tokens": int(usage["prompt_tokens"]), "completion_tokens": int(usage["completion_tokens"])}
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 #: Member-voice check-in journals (all pass ``post``).

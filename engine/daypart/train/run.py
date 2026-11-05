@@ -10,8 +10,11 @@
 
 Credentials come from the environment only. ``MUSE_API_KEY`` falls back to
 ``META_MODEL_API_KEY``; ``MUSE_BASE_URL`` defaults to the Meta model API.
-Spend is capped twice: a hard call budget and a USD estimate (chars/4 token
-approximation at the model's list price). Either cap stops the run cleanly;
+Spend is capped twice: a hard call budget and a USD estimate at the model's
+list price, from the reported ``usage`` token counts (reasoning tokens are in
+``completion_tokens``; chars/4 only when a client reports no usage). Muse
+reasoning models get ``--reasoning-effort`` (default ``minimal``); a reply
+truncated before any content is retried with double ``max_tokens``. Either cap stops the run cleanly;
 what was cached so far is kept. ``--offline`` swaps in ``TemplateClient``.
 """
 
@@ -56,6 +59,7 @@ class BudgetedClient:
         price: tuple[float, float],
         retries: int = 4,
         backoff_s: float = 2.0,
+        max_tokens_cap: int = 2048,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.inner = inner
@@ -66,25 +70,45 @@ class BudgetedClient:
         self.retries = retries
         self.backoff_s = backoff_s
         self.sleep = sleep
+        self.max_tokens_cap = max_tokens_cap
         self.calls = 0
-        self.in_chars = 0
-        self.out_chars = 0
+        self.in_tokens: float = 0
+        self.out_tokens: float = 0
+        self.truncations = 0
 
     @property
     def est_usd(self) -> float:
         p_in, p_out = self.price
-        return (self.in_chars / 4) * p_in / 1e6 + (self.out_chars / 4) * p_out / 1e6
+        return self.in_tokens * p_in / 1e6 + self.out_tokens * p_out / 1e6
+
+    def _bill(self, messages: Sequence[Mapping[str, str]], text: str | None) -> None:
+        usage = getattr(self.inner, "last_usage", None)
+        if usage:
+            self.in_tokens += usage["prompt_tokens"]
+            self.out_tokens += usage["completion_tokens"]
+        else:
+            self.in_tokens += sum(len(m["content"]) for m in messages) / 4
+            self.out_tokens += len(text or "") / 4
 
     def complete(self, messages: Sequence[Mapping[str, str]], *, seed: int, **kw: Any) -> str:
         if self.calls >= self.max_calls:
             raise BudgetExceeded(f"call budget reached ({self.max_calls})")
         if self.est_usd >= self.max_usd:
             raise BudgetExceeded(f"spend cap reached (est ${self.est_usd:.2f} >= ${self.max_usd:.2f})")
+        from daypart.simmember.narrative import TruncatedResponseError
+
         self.calls += 1
-        self.in_chars += sum(len(m["content"]) for m in messages)
+        max_tokens = int(kw.pop("max_tokens", 256))
         for attempt in range(self.retries + 1):
             try:
-                text = self.inner.complete(messages, seed=seed, **kw)
+                text = self.inner.complete(messages, seed=seed, max_tokens=max_tokens, **kw)
+            except TruncatedResponseError:
+                self._bill(messages, None)
+                self.truncations += 1
+                if max_tokens * 2 > self.max_tokens_cap or attempt == self.retries:
+                    raise
+                max_tokens *= 2
+                continue
             except urllib.error.HTTPError as exc:
                 if exc.code not in _RETRYABLE_HTTP or attempt == self.retries:
                     raise
@@ -92,7 +116,7 @@ class BudgetedClient:
                 if attempt == self.retries:
                     raise
             else:
-                self.out_chars += len(text)
+                self._bill(messages, text)
                 return text
             self.sleep(self.backoff_s * (2**attempt))
         raise AssertionError("unreachable")
@@ -113,7 +137,8 @@ def _client(args: argparse.Namespace, env: Mapping[str, str]) -> Any:
 
     if args.offline:
         return TemplateClient()
-    return MuseClient(model_id=args.model, env=muse_env(env))
+    effort = getattr(args, "reasoning_effort", "minimal")
+    return MuseClient(model_id=args.model, env=muse_env(env), reasoning_effort=None if effort == "none" else effort)
 
 
 def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep=time.sleep) -> dict:
@@ -191,6 +216,9 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
         "dpo_sha256": dpo_sha,
         "calls": client.calls,
         "est_usd": round(client.est_usd, 4),
+        "tokens_in": int(client.in_tokens),
+        "tokens_out": int(client.out_tokens),
+        "truncations": client.truncations,
         "stopped": stopped,
         "dpo_error": dpo_error,
         "member_failures": failures[:20],
@@ -208,6 +236,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--model", default=DEFAULT_MODEL)
     p.add_argument("--max-calls", type=int, default=12000)
     p.add_argument("--max-usd", type=float, default=40.0)
+    p.add_argument(
+        "--reasoning-effort",
+        default="minimal",
+        help="Muse reasoning_effort (minimal|low|medium|high|max; 'none' omits the field)",
+    )
     p.add_argument("--refusal-ratio", type=float, default=0.2)
     p.add_argument("--per-member", type=int, default=2)
     p.add_argument("--dpo-members", type=int, default=None)
