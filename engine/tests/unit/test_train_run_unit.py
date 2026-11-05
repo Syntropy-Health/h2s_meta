@@ -8,7 +8,7 @@ import urllib.error
 
 import pytest
 
-from daypart.simmember.narrative import MissingCredentialsError, TemplateClient
+from daypart.simmember.narrative import MissingCredentialsError, TemplateClient, TruncatedResponseError
 from daypart.train import run as R
 
 
@@ -86,3 +86,60 @@ def test_spend_cap():
 def test_default_model_is_priced():
     assert R.DEFAULT_MODEL in R.PRICES
     assert json.dumps(R.PRICES)
+
+
+# ---------------------------------------------------------------- HAC-28: reasoning models
+
+
+class _Truncating:
+    """Reasoning model: truncates (content null, finish=length) below ``need`` max_tokens."""
+
+    model_id = "muse-spark-1.3"
+
+    def __init__(self, need):
+        self.need = need
+        self.seen = []
+        self.last_usage = None
+
+    def complete(self, messages, *, seed, max_tokens=256, **kw):
+        self.seen.append(max_tokens)
+        self.last_usage = {"prompt_tokens": 1000, "completion_tokens": max_tokens}
+        if max_tokens < self.need:
+            raise TruncatedResponseError(max_tokens)
+        return "ok?"
+
+
+def test_budgeted_client_escalates_max_tokens_on_truncation():
+    inner = _Truncating(need=1024)
+    c = R.BudgetedClient(inner, max_calls=5, max_usd=10, price=(1, 1), sleep=lambda s: None)
+    assert c.complete([{"role": "user", "content": "x"}], seed=1) == "ok?"
+    assert inner.seen == [256, 512, 1024]
+    assert c.calls == 1
+
+
+def test_budgeted_client_truncation_gives_up_typed():
+    c = R.BudgetedClient(_Truncating(need=10**6), max_calls=5, max_usd=10, price=(1, 1), sleep=lambda s: None)
+    with pytest.raises(TruncatedResponseError):
+        c.complete([{"role": "user", "content": "x"}], seed=1)
+
+
+def test_spend_counts_reported_tokens_including_reasoning():
+    inner = _Truncating(need=512)
+    c = R.BudgetedClient(inner, max_calls=5, max_usd=10, price=(1.0, 2.0), sleep=lambda s: None)
+    c.complete([{"role": "user", "content": "x"}], seed=1)
+    # Two billed attempts: (1000 in + 256 out) + (1000 in + 512 out), not chars/4 of "ok?".
+    assert c.in_tokens == 2000 and c.out_tokens == 768
+    assert c.est_usd == pytest.approx((2000 * 1.0 + 768 * 2.0) / 1e6)
+
+
+def test_spend_falls_back_to_chars_without_usage():
+    c = R.BudgetedClient(TemplateClient(), max_calls=5, max_usd=10, price=(1.0, 1.0), sleep=lambda s: None)
+    out = c.complete([{"role": "user", "content": "abcd" * 10}], seed=1)
+    assert c.in_tokens == 10 and c.out_tokens == pytest.approx(len(out) / 4)
+
+
+def test_run_passes_reasoning_effort(tmp_path):
+    args = _args(tmp_path, "--reasoning-effort", "low")
+    client = R._client(args, {"MUSE_API_KEY": "k"})
+    assert client.reasoning_effort == "low"
+    assert R._client(_args(tmp_path), {"MUSE_API_KEY": "k"}).reasoning_effort == "minimal"
