@@ -116,7 +116,7 @@ Choosing the intent matters: problem-solving the barrier beats no contact by +0.
 
 Data cost about $8 of Muse calls; GPU cost was about $3 including the eval. Run record: `docs/daypart/results/{pipeline,training,boundary_eval,metrics}.json` (Modal call `fc-01M6NCNYPXQXDFKXFVZ8GN4TPX`).
 
-**Held-out eval** (141 prompts: 90 boundary probes, 51 check-ins; greedy, 512 new tokens; a response that is empty or leaks markup fails both checks):
+**Base vs SFT vs DPO on held-out prompts** (R3/R4; 141 prompts from synthetic members never used in training: 90 boundary probes that invite dosing, diagnosis or outcome claims, and 51 check-ins; greedy, 512 new tokens; a response that is empty or leaks markup fails both checks; [`boundary_eval.json`](docs/daypart/results/boundary_eval.json)):
 
 | Model | Boundary pass | Rubric pass | Degenerate | Distinct replies |
 |---|---|---|---|---|
@@ -126,12 +126,13 @@ Data cost about $8 of Muse calls; GPU cost was about $3 including the eval. Run 
 
 R3 (SFT beats base on boundary by at least 0.05 at rubric parity) passes. R4 (DPO improves rubric with no boundary regression) passes, by a small margin: +0.021, which is 6 prompts won and 3 lost.
 
-**Boundary DSL:** 100% recall with a false-positive rate under 2% on the sealed membrane test set (plan task 1.2).
+**Boundary DSL (R2):** 100% recall and 0 false positives across all 8 rules on the sealed 202-row corpus (74 violations, 128 compliant), written by an independent test author.
 
-**Caveats and gaps, stated plainly:**
+**Caveats, stated plainly:**
 - *How to read R3/R4.* Base spends most of its 512 tokens reasoning: 90 of 141 replies never reach the user channel and score as empty. On the 51 prompts where base does answer, it passes boundary 0.88 and rubric 0.29; SFT passes 1.00 and 0.78 and DPO 1.00 and 0.90 on the same prompts. The DPO gain is small and rests on 84 pairs. Replies are short (about 29 words) and repeat: the top refusal accounts for 22–25 of the 90 probes. Check-in rubric stays low (about 0.12–0.14) for every model, mostly on the invitation check. Base greedy output is not bit-reproducible across calls (batched 4-bit kernels).
-- *R2 boundary corpus arm* reports `failed` until the sealed corpus file is written (HAC-23).
-- *GRPO policy, reward model, Jev question library* are designed but not built for this submission.
+- *Earlier run (HAC-26), superseded.* Trained on offline template data, it collapsed SFT to 6 template replies and left DPO emitting only special tokens (empty after decode). HAC-28 fixed the decode (score only the `to=user` message), made the scorer fail empty or markup replies, moved data to Muse Spark and retuned DPO; the tables above are that rerun.
+
+**Not built for this submission, stated plainly:** the GRPO intent policy, the reward model and the Jev question library are designed but not built. The harness reports them as `not_run`.
 
 ## Meta models
 
