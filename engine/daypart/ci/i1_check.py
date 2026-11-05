@@ -25,7 +25,6 @@ def _training_trajectories(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
     return (cohort.trajectories[p.member_id].model_dump(mode="json") for p in cohort.training_profiles())
 
 
-<<<<<<< HEAD
 def _eval_scenarios(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
     """Every scenario the default ``runs.yaml`` env_baseline arms build for this cohort (all seeds)."""
     # lazy: daypart.eval imports this module (i1_gate arm) — no import cycle
@@ -40,8 +39,6 @@ def _eval_scenarios(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
     ]
 
 
-=======
->>>>>>> origin/daypart/hac20-demo
 _I1_MEMBERS = 12  # small fixed set of training members (<= 20) keeps the gate fast
 
 
@@ -69,38 +66,15 @@ def _dpo_pairs(cohort: Cohort) -> list[dict]:
     with tempfile.TemporaryDirectory() as tmp:
         contexts = make_contexts(cohort, _realized_cache(cohort, Path(tmp)), max_members=_I1_MEMBERS)
     return build_pairs(contexts, TemplateClient())
-<<<<<<< HEAD
-=======
-
-
-def _eval_scenarios(cohort: Cohort) -> Iterable[Mapping[str, Any]]:
-    """Every scenario the default ``runs.yaml`` env_baseline arms build for this cohort (all seeds)."""
-    # lazy: daypart.eval imports this module (i1_gate arm) — no import cycle
-    from daypart.eval import arm_scenarios, load_runs
-
-    config = load_runs()
-    return [
-        s.model_dump(mode="json")
-        for arm in config.arms
-        if arm.kind == "env_baseline"
-        for s in arm_scenarios(arm, cohort)
-    ]
->>>>>>> origin/daypart/hac20-demo
 
 
 #: name -> builder(cohort) -> training rows. Add every new dataset builder (2.1 SFT, 2.3 DPO, ...).
 BUILDERS: dict[str, Callable[[Cohort], Iterable[Mapping[str, Any]]]] = {
     "simmember.training_profiles": _training_profiles,
     "simmember.training_trajectories": _training_trajectories,
-<<<<<<< HEAD
     "eval.scenarios": _eval_scenarios,
     "train.sft_dataset": _sft_dataset,
     "train.dpo_pairs": _dpo_pairs,
-=======
-    "train.sft_dataset": _sft_dataset,
-    "train.dpo_pairs": _dpo_pairs,
-    "eval.scenarios": _eval_scenarios,
->>>>>>> origin/daypart/hac20-demo
 }
 
 
