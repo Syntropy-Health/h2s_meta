@@ -116,22 +116,23 @@ def main() -> None:
 
 def _training_panel(directory) -> None:
     """Muse Glimmer 30B QLoRA run (training.json) + the base/SFT/DPO boundary eval (boundary_eval.json)."""
-    try:
-        record, report = load_training(directory), load_boundary(directory)
-    except MetricsFileError as exc:
-        st.error(str(exc))
-        return
     st.subheader("Training · Muse Glimmer 30B, 4-bit QLoRA on Modal")
-    if record is None:
+    try:  # each file renders on its own: a bad training.json does not hide the boundary table
+        record = load_training(directory)
+        stages = pd.DataFrame(training_rows(record)) if record is not None else None
+        losses = pd.DataFrame(loss_rows(record)) if record is not None else None
+    except (MetricsFileError, KeyError, TypeError, ValueError) as exc:
+        st.error(f"training.json: {exc}")
+        record = None
+        stages = losses = pd.DataFrame()
+    if record is None and stages is None:
         st.info("No training.json committed yet.")
-    else:
-        stages = pd.DataFrame(training_rows(record))
+    elif stages is not None and not stages.empty:
         k = st.columns(len(stages) * 2)
         for i, row in enumerate(stages.itertuples()):
             k[2 * i].metric(f"{row.stage.upper()} steps", f"{row.steps:,}", help=f"{row.rows:,} rows")
             k[2 * i + 1].metric(f"{row.stage.upper()} time · peak GPU", f"{row.train_minutes} min · {row.peak_gpu_gb} GB")
         st.dataframe(stages, hide_index=True, use_container_width=True)
-        losses = pd.DataFrame(loss_rows(record))
         if not losses.empty:
             st.caption("Training loss by step (logged every 10 steps; the run record keeps the last entries)")
             chart = (
@@ -147,12 +148,20 @@ def _training_panel(directory) -> None:
                 .resolve_scale(x="independent", y="independent")
             )
             st.altair_chart(chart)
+    elif record is not None:
+        st.info("training.json has no sft or dpo stage.")
 
     st.subheader("Boundary eval · base vs SFT vs DPO (held-out prompts)")
+    try:
+        report = load_boundary(directory)
+        table = pd.DataFrame(boundary_rows(report)) if report is not None else None
+    except (MetricsFileError, KeyError, TypeError, ValueError) as exc:
+        st.error(f"boundary_eval.json: {exc}")
+        return
     if report is None:
         st.info("No boundary_eval.json committed yet: the base, sft and dpo arms report not run.")
         return
-    st.dataframe(pd.DataFrame(boundary_rows(report)), hide_index=True, use_container_width=True)
+    st.dataframe(table, hide_index=True, use_container_width=True)
     v = st.columns(2)
     for col, key, label in ((v[0], "r3", "R3 · SFT over base by the pre-registered margin"),
                             (v[1], "r4", "R4 · DPO ≥ SFT on rubric, no boundary regression")):
