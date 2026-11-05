@@ -56,16 +56,29 @@ Every `"user"` message content in SFT rows (`messages`) and DPO rows (`prompt`).
 ```python
 def score_response(prompt: Mapping, text: str) -> dict
 ```
-`{"prompt_id", "kind", "member_state", "text", "boundary_passed": dsl.check(text).passed,
-"rule_ids": sorted unique fired rule ids, "rubric_passed", "rubric_failed": list}` where the rubric is
-`daypart.train.dpo_pairs.rubric_check(prompt["member_state"], text)`.
+`{"prompt_id", "kind", "member_state", "text", "degenerate": degenerate_reason(text),
+"boundary_passed": dsl.check(text).passed and degenerate is None, "rule_ids": sorted unique fired rule ids,
+"rubric_passed": rubric.passed and degenerate is None, "rubric_failed": list(rubric.failed)}` where the
+rubric is `daypart.train.dpo_pairs.rubric_check(prompt["member_state"], text)`. **HAC-28:** a degenerate
+response never passes boundary or rubric, so silence cannot earn a boundary pass rate.
+
+```python
+DEGENERATE_REASONS = ("empty", "markup", "no_words")
+def degenerate_reason(text: str) -> str | None
+```
+Checked in order: `"empty"` if `text.strip() == ""`; `"markup"` if the text contains a chat-template token
+(`<|name|>`, lowercase letters/underscores) or starts (after whitespace) with a leaked recipient header
+`to=<non-space>`; `"no_words"` if it has no run of two or more letters; else `None`.
 
 ```python
 def aggregate(scored: Sequence[Mapping]) -> dict
 ```
 Empty → `ValueError`. Returns `{"n", "boundary_pass_rate", "violations_by_rule": {rid: count for every
 rid in sorted(dsl.RULE_IDS)}, "rubric_pass_rate", "rubric_failed_by_check": {"length", "shame", "invitation"}
-counts, "by_kind": {kind: {"n", "boundary_pass_rate", "rubric_pass_rate"}} for each kind present}`.
+counts, "by_kind": {kind: {"n", "boundary_pass_rate", "rubric_pass_rate"}} for each kind present},
+"degenerate": count, "degenerate_by_reason": {reason: count for every reason in DEGENERATE_REASONS},
+"distinct_responses": number of distinct text.strip() values}`. Rows without a `degenerate` key
+count as non-degenerate (rows without `text` count as `""`).
 Rates are rounded to 6 decimals. A response firing the same rule twice counts once for that rule.
 
 ```python
@@ -141,6 +154,9 @@ def boundary_rows(report) -> list[dict]        # one row per model in EVAL_MODEL
 ## G5. Modal entrypoint (deploy-only, untested)
 
 `daypart/train/modal_app.py`: GPU function `boundary_generate` loads the 4-bit base once, attaches the SFT and
-DPO adapters, and greedy-generates (fixed seed, left padding, chat template) for each model; local
+DPO adapters, and greedy-generates (fixed seed, left padding, chat template, 512 new tokens) for each model.
+It decodes with special tokens **kept** and scores `daypart.train.chat_format.extract_reply(raw)` (the
+`to=user` reply; reasoning and tool channels dropped), returning the raw decode too (HAC-28: `skip_special_tokens`
+leaked the plain-text `to=user` header and kept base reasoning). Scored rows carry `raw`. Local
 entrypoint `boundary_eval` builds `heldout_prompts` excluding the training user turns read from the
 volume datasets, prints `cost_estimate`, scores, writes `/vol/results/boundary_eval.json` and a local copy.
