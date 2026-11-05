@@ -1,0 +1,101 @@
+"""FastAPI playground (HAC-20). Offline, no secrets, synthetic members only (I1)."""
+
+from __future__ import annotations
+
+from importlib.resources import files
+from typing import Annotated
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, ConfigDict, Field
+
+from daypart.demo.playground import (
+    MAX_HORIZON,
+    EpisodeDone,
+    Playground,
+    UnknownEpisode,
+    UnknownMember,
+)
+from daypart.simmember.dynamics import INTENTS
+
+IntentName = Annotated[str, Field(json_schema_extra={"enum": list(INTENTS)})]
+
+
+class EpisodeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    member_id: str
+    seed: int = 0
+    horizon: int = Field(14, ge=1, le=MAX_HORIZON)
+
+
+class StepIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    intent: IntentName
+    text: str | None = Field(None, max_length=2000)  # None -> the intent's boundary-safe default
+
+
+def create_app(cohort_seed: int = 0) -> FastAPI:
+    pg = Playground(cohort_seed)
+    app = FastAPI(
+        title="Daypart playground",
+        description="Synthetic SimMembers only. Not a consumer UI. Not medical advice.",
+        version="0.1.0",
+    )
+    app.state.playground = pg
+    index_html = files("daypart.demo").joinpath("static/index.html").read_text(encoding="utf-8")
+
+    def _404(what: str, key: str) -> HTTPException:
+        return HTTPException(status_code=404, detail=f"unknown {what}: {key}")
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def index() -> str:
+        return index_html
+
+    @app.get("/api/health")
+    def health() -> dict:
+        return {"status": "ok", "cohort_seed": pg.cohort_seed}
+
+    @app.get("/api/intents")
+    def intents() -> list[dict]:
+        return pg.intents()
+
+    @app.get("/api/members")
+    def members() -> list[dict]:
+        return pg.members()
+
+    @app.post("/api/episodes", status_code=201)
+    async def start(body: EpisodeIn) -> dict:
+        try:
+            return await pg.start(body.member_id, seed=body.seed, horizon=body.horizon)
+        except UnknownMember:
+            raise _404("member", body.member_id) from None
+
+    @app.get("/api/episodes/{episode_id}")
+    def episode(episode_id: str) -> dict:
+        try:
+            return pg.episode(episode_id)
+        except UnknownEpisode:
+            raise _404("episode", episode_id) from None
+
+    @app.post("/api/episodes/{episode_id}/step")
+    async def step(episode_id: str, body: StepIn) -> dict:
+        if body.intent not in INTENTS:
+            raise HTTPException(status_code=422, detail=f"intent must be one of {list(INTENTS)}")
+        try:
+            return await pg.step(episode_id, body.intent, body.text)
+        except UnknownEpisode:
+            raise _404("episode", episode_id) from None
+        except EpisodeDone:
+            raise HTTPException(status_code=409, detail="episode is done; start a new one") from None
+
+    @app.get("/api/members/{member_id}/passport")
+    async def passport(member_id: str, day: Annotated[int, Query(ge=0, le=MAX_HORIZON)] = 41) -> dict:
+        try:
+            return await pg.passport(member_id, day)
+        except UnknownMember:
+            raise _404("member", member_id) from None
+
+    return app
+
+
+__all__ = ["create_app"]
