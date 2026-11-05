@@ -165,3 +165,45 @@ def test_modal_app_compiles():
     import daypart.train
 
     py_compile.compile(str(Path(daypart.train.__file__).parent / "modal_app.py"), doraise=True)
+
+
+# --- HAC-17: LoRA targets hit the Muse Glimmer language tower only ---------------------------
+
+_LANG = "model.language_model.layers.{i}.{blk}.{proj}"
+_VISION = "model.vision_tower.layers.{i}.attn.{proj}"
+
+
+def test_language_lora_targets_hits_language_tower_only():
+    import re
+
+    from daypart.train.modal_jobs import language_lora_targets
+
+    rx = re.compile(language_lora_targets(("q_proj", "k_proj", "v_proj", "o_proj")))
+    for i in (0, 7, 51):
+        for proj in ("q_proj", "k_proj", "v_proj", "o_proj"):
+            assert rx.fullmatch(_LANG.format(i=i, blk="self_attn", proj=proj))
+    for proj in ("q_proj", "k_proj", "v_proj", "proj"):
+        assert not rx.fullmatch(_VISION.format(i=3, proj=proj))
+    assert not rx.fullmatch(_LANG.format(i=0, blk="self_attn", proj="gate_proj"))  # attention gate untouched
+    assert not rx.fullmatch(_LANG.format(i=0, blk="mlp", proj="up_proj"))
+    assert not rx.fullmatch("model.language_model.layers.0.self_attn.q_proj.lora_A")
+    assert not rx.fullmatch("lm_head")
+
+
+def test_language_lora_targets_mlp_and_escaping():
+    import re
+
+    from daypart.train.modal_jobs import language_lora_targets
+
+    rx = re.compile(language_lora_targets(("up_proj", "down_proj"), prefix="a.b"))
+    assert rx.fullmatch("a.b.3.mlp.up_proj")
+    assert not rx.fullmatch("aXb.3.mlp.up_proj")  # prefix dots are literal
+    assert not rx.fullmatch("model.language_model.layers.3.mlp.up_proj")
+
+
+def test_language_lora_targets_rejects_bad_names():
+    from daypart.train.modal_jobs import language_lora_targets
+
+    for bad in ((), ("",), ("q_proj", "a.b"), ("q_proj|.*",)):
+        with pytest.raises(ValueError):
+            language_lora_targets(bad)
