@@ -1,0 +1,268 @@
+{
+  "arms": [
+    {
+      "kind": "r2_dsl",
+      "metrics": {
+        "corpus": "tests/sealed/data/r2_corpus_v1.jsonl",
+        "false_positives": 0,
+        "fp_rate": 0.0,
+        "missed": 0,
+        "n_compliant": 128,
+        "n_rows": 202,
+        "n_violation": 74,
+        "per_rule": {
+          "crisis.missing_handoff": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 8,
+            "recall": 1.0
+          },
+          "diagnosis.claim": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 9,
+            "recall": 1.0
+          },
+          "dosing.imperative": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 9,
+            "recall": 1.0
+          },
+          "dosing.unit_quantity": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 12,
+            "recall": 1.0
+          },
+          "lhm.banned_lexicon": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 9,
+            "recall": 1.0
+          },
+          "lhm.imperative_dose": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 8,
+            "recall": 1.0
+          },
+          "substance.rx_named": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 10,
+            "recall": 1.0
+          },
+          "treatment.claim": {
+            "fired_on_compliant": 0,
+            "fp_rate": 0.0,
+            "n_labeled": 9,
+            "recall": 1.0
+          }
+        },
+        "recall": 1.0,
+        "rule_version": "boundary-v1"
+      },
+      "name": "r2_boundary_dsl",
+      "reason": null,
+      "status": "ok"
+    },
+    {
+      "kind": "env_baseline",
+      "metrics": {
+        "episode_violation_rate": 0.0,
+        "horizon": 14,
+        "mean_adherence": 0.636667,
+        "n_scenarios": 50,
+        "per_seed": [
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.632857,
+            "mean_return": 8.86,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "eac764ac3702f148877e07777da156410eddc60060bed9e0eebb790c3f6e3945",
+            "seed": 0
+          },
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.615714,
+            "mean_return": 8.62,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "98a74e820211d2fa7064f79bf4243062fa2baa02b3fb663eb94e3a57adf01e8e",
+            "seed": 1
+          },
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.661429,
+            "mean_return": 9.26,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "90b3b38a57388a29baaa05485c612521661a0d82271cf789e2a927c87600e5c0",
+            "seed": 2
+          }
+        ],
+        "policy": "always_none",
+        "seeds": [
+          0,
+          1,
+          2
+        ]
+      },
+      "name": "env_always_none",
+      "reason": null,
+      "status": "ok"
+    },
+    {
+      "kind": "env_baseline",
+      "metrics": {
+        "episode_violation_rate": 0.0,
+        "horizon": 14,
+        "mean_adherence": 0.833333,
+        "n_scenarios": 50,
+        "per_seed": [
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.832857,
+            "mean_return": 11.66,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "eac764ac3702f148877e07777da156410eddc60060bed9e0eebb790c3f6e3945",
+            "seed": 0
+          },
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.817143,
+            "mean_return": 11.44,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "98a74e820211d2fa7064f79bf4243062fa2baa02b3fb663eb94e3a57adf01e8e",
+            "seed": 1
+          },
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.85,
+            "mean_return": 11.9,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "90b3b38a57388a29baaa05485c612521661a0d82271cf789e2a927c87600e5c0",
+            "seed": 2
+          }
+        ],
+        "policy": "always_barrier_problem_solving",
+        "seeds": [
+          0,
+          1,
+          2
+        ]
+      },
+      "name": "env_always_barrier_problem_solving",
+      "reason": null,
+      "status": "ok"
+    },
+    {
+      "kind": "env_baseline",
+      "metrics": {
+        "episode_violation_rate": 0.0,
+        "horizon": 14,
+        "mean_adherence": 0.719047,
+        "n_scenarios": 50,
+        "per_seed": [
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.708571,
+            "mean_return": 9.92,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "eac764ac3702f148877e07777da156410eddc60060bed9e0eebb790c3f6e3945",
+            "seed": 0
+          },
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.715714,
+            "mean_return": 10.02,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "98a74e820211d2fa7064f79bf4243062fa2baa02b3fb663eb94e3a57adf01e8e",
+            "seed": 1
+          },
+          {
+            "episode_violation_rate": 0.0,
+            "mean_adherence": 0.732857,
+            "mean_return": 10.26,
+            "n_episodes": 50,
+            "scenario_manifest_sha256": "90b3b38a57388a29baaa05485c612521661a0d82271cf789e2a927c87600e5c0",
+            "seed": 2
+          }
+        ],
+        "policy": "random_intent",
+        "seeds": [
+          0,
+          1,
+          2
+        ]
+      },
+      "name": "env_random_intent",
+      "reason": null,
+      "status": "ok"
+    },
+    {
+      "kind": "i1_gate",
+      "metrics": {
+        "builders": {
+          "eval.scenarios": "ok",
+          "simmember.training_profiles": "ok",
+          "simmember.training_trajectories": "ok",
+          "train.dpo_pairs": "ok",
+          "train.sft_dataset": "ok"
+        },
+        "passed": true
+      },
+      "name": "i1_gate",
+      "reason": null,
+      "status": "ok"
+    },
+    {
+      "kind": "not_run",
+      "metrics": null,
+      "name": "sft",
+      "reason": "needs a Fireworks key (G6) and the SFT dataset (2.1), which is not built",
+      "status": "not_run"
+    },
+    {
+      "kind": "not_run",
+      "metrics": null,
+      "name": "dpo",
+      "reason": "needs a Fireworks key (G6) and the DPO pairs (2.3), which are not built",
+      "status": "not_run"
+    },
+    {
+      "kind": "not_run",
+      "metrics": null,
+      "name": "grpo",
+      "reason": "needs a trained reward model (4.2) and policy (4.3), neither built",
+      "status": "not_run"
+    },
+    {
+      "kind": "not_run",
+      "metrics": null,
+      "name": "rm",
+      "reason": "reward model (4.2) is not built",
+      "status": "not_run"
+    },
+    {
+      "kind": "not_run",
+      "metrics": null,
+      "name": "jev",
+      "reason": "Jev question library (4.1) is not built",
+      "status": "not_run"
+    }
+  ],
+  "cohort_seed": 0,
+  "guard_versions": {
+    "claims": "claims-v3",
+    "valence": "valence-v2"
+  },
+  "rule_version": "boundary-v1",
+  "runs_digest": "396231b5eebc974893aae9537663695ed2ed845ecf65d3394c4befbf3976af94",
+  "runs_version": "eval-v1",
+  "schema": "daypart-metrics/v1",
+  "summary": {
+    "failed": 0,
+    "not_run": 5,
+    "ok": 5
+  }
+}

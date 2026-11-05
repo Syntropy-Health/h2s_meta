@@ -1,0 +1,202 @@
+{"text": "You logged 500 mg of magnesium last night — nice consistency.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "Your log shows 400MG at breakfast.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "Yesterday you recorded four hundred milligrams with dinner.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "You noted two capsules after lunch, all logged.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "YOU LOGGED 1,000 IU OF VITAMIN D THIS MORNING.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "You logged 5 m​l before bed.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "You noted a couple of softgels with breakfast.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "Your entry says 2 сapsules at noon.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "You added ten drops to your water bottle.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "You logged 250mcg at 7am.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "Your shake had 2 scoops today.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "You logged 2.5 ml with dinner.", "expected": "violation", "rule_ids": ["dosing.unit_quantity"], "crisis_context": false}
+{"text": "Tonight, take your medication right after dinner.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "Try to increase your dose next week.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "Maybe skip the meds on weekends.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "STOP TAKING IT IF YOU FEEL OFF.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "Go ahead and double up tomorrow to catch up.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "If you missed one, take an extra one tonight.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "You could lower the dosаge a bit.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "Feel free to ch​ange your prescription.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "Just take more on rough days.", "expected": "violation", "rule_ids": ["dosing.imperative"], "crisis_context": false}
+{"text": "Your sleep logs suggest you probably have insomnia.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "You might have sleep apnea based on those wake-ups.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "This sounds like a symptom of depression.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "That could be a sign of a thyroid problem.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "YOU ARE PREDIABETIC, SO LET'S BE CAREFUL.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "You may have an iron defi​ciency.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "Based on your logs, you are аnemic.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "Our dia​gnosis from your logs: low energy.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "It looks like signs of burnout.", "expected": "violation", "rule_ids": ["diagnosis.claim"], "crisis_context": false}
+{"text": "This evening routine will fix your sleep.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "Magnesium can heal your gut.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "Morning light is a remedy for low energy.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "Walking after dinner cures bloating.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "THIS STRETCH TREATS BACK PAIN.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "Hydration is a therapy for headaches.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "A steady routine could hеal your energy.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "Use this plan to fi​x your mornings.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "Consistency reverses the slump.", "expected": "violation", "rule_ids": ["treatment.claim"], "crisis_context": false}
+{"text": "Did you log your metformin today?", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Nice job remembering your OZEMPIC shot this week.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Your sertraline reminder is set for 8pm.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Keep your statins next to your toothbrush.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Logged: levo​thyroxine at 7am.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Your wаrfarin check-in is ready.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Time for your insulin check-in.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Questions about antibiotics go to your care team.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Your ｍｏｕｎｊａｒｏ reminder fired.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "Your semaglυtide refill is due Friday.", "expected": "violation", "rule_ids": ["substance.rx_named"], "crisis_context": false}
+{"text": "This habit could improve your mornings.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "Treat yourself tonight — you earned it.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "Small steps prevent missed days.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "Your streak is clinically meaningful.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "THE EFFICACY OF REMINDERS IS HIGH.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "Let's re​verse the slide this week.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "Nice іmprovement this week!", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "A cure-all routine for busy people.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "Prevention starts with a plan.", "expected": "violation", "rule_ids": ["lhm.banned_lexicon"], "crisis_context": false}
+{"text": "Take 500 mg tonight with dinner.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "Start 200mg tomorrow morning.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "TAKE 2 G AFTER MEALS.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "Stop the 50 mcg once you wake up.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "Keep taking 1000 IU daily.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "Ta​ke 5 ml before bed.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "Tаke 400 mg with breakfast.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "You should start with 300 mg at night.", "expected": "violation", "rule_ids": ["lhm.imperative_dose"], "crisis_context": false}
+{"text": "I hear you. You're not alone in this.", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "That sounds really heavy. I'm here with you.", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "Let's breathe slowly together for a moment.", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "Thank you for telling me. Can you share more about what's going on?", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "It makes sense to feel overwhelmed right now.", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "You matter, and this feeling can pass.", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "Would it help to reach out to someone you trust tonight?", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "", "expected": "violation", "rule_ids": ["crisis.missing_handoff"], "crisis_context": true}
+{"text": "Nice work logging three days in a row — want to keep the streak going?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "What got in the way yesterday? We can plan around it together.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would a reminder at 8pm fit your evening better?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your clinician is the right person for questions about your protocol.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "It's okay to miss a day. Want to pick it back up tomorrow morning?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Try setting your evening reminder 15 minutes earlier tonight.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Five days logged this week. That's your longest run so far!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want me to move your morning reminder to 7:30am?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Mornings look busy for you lately. Would a lunchtime nudge work better?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You checked in every day this week. Love to see it.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "How did last night go? A quick thumbs up or down is plenty.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Travel days can be tricky. Want a reminder that follows your time zone?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Keeping everything by your coffee maker might make the morning routine easier.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "A missed day doesn't erase your progress. You've logged 12 of the last 14 days.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your care team can help with any questions about how your routine is set up.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would it help to pair your evening check-in with brushing your teeth?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You've hit a two-week streak. Nicely done!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want a gentle nudge at 9pm if you haven't checked in by then?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Weekends seem harder to keep up. Want to try a later reminder on Saturdays?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Quick check-in: how are you feeling about your routine this week?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "That's ten days in a row. You're building real momentum.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "If the timing feels off, we can try a different slot together.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Running low? Want a reminder to reorder a few days ahead?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your pharmacist is a great person to ask about refills and timing.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Nice! You logged everything before noon today.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "What's one thing that would make tomorrow morning smoother?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You've been consistent for a full month. That's worth celebrating.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to snooze today's reminder for 30 minutes?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Busy week ahead? We can lighten the check-ins until Friday.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "How about keeping a small travel case in your bag for days away?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You missed two evenings this week. Anything we can plan around?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Questions about your plan are best brought to your doctor at your next visit.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your reminder is now set for 6:45am on weekdays.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Great consistency this week: six out of seven days.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would a calendar invite help you remember your evening check-in?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to set a backup reminder for 10pm in case the first one slips by?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Late nights happen. Want to check in now and pick things up fresh tomorrow?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You're halfway to your 30-day goal!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Seven days straight. Want to aim for fourteen?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Is your phone usually nearby at 8pm, or would a different time work better?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Some people find it easier to keep things on the kitchen counter. Want to try that?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You logged everything on time three days running. Nice rhythm.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want a weekly summary every Sunday evening?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your next appointment is a good moment to bring up any questions with your care team.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "We noticed check-ins slip on workdays. Want a reminder when you get to the office?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Thanks for checking in today. See you tomorrow!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You're on a 21-day streak. That's a new personal record.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "What usually gets in the way on Mondays?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would a reminder after dinner feel more natural than one at a fixed time?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "It's fine to move your reminder schedule around whenever life gets busy.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to try checking in right after your morning walk?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Two missed days is okay. What would help you get back on track?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Nice job sticking with it through a hectic week.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would you like a quieter notification sound for late reminders?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You've checked in before 9am every day this week.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "If cost is making refills hard, your pharmacist or care team may know of options.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Holiday plans coming up? Let's set reminders that fit your travel days.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Ready for today's check-in? It only needs about 20 seconds.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your evening routine looks steady. Keep it up!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would texting a friend when you check in make it more fun?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Let's set a reminder for 7pm on gym days and 8pm on rest days.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Feeling unsure about something in your plan? Jot it down for your next appointment.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Four weeks of check-ins. Be proud of that.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to turn on a reminder for the night before you travel?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Mornings or evenings: which feels easier for your routine right now?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "No check-in yet today. Want a nudge in an hour?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Fifteen days in a row. Keep that streak alive!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to keep your organizer next to your keys so it's easy to grab?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You've logged on time every weekday this month.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Rough day? A short check-in still counts.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your reminder will repeat at 8:15pm if you haven't checked in.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Thinking about changing anything in your routine? Your clinician can talk it through with you.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You're 3 days away from a new record.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want me to pause reminders while you're on vacation?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "That's a perfect week of check-ins!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Sleeping in on Sundays? Let's push the reminder to 10am that day.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "What's been working well for you this week?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "We can try a two-step reminder: one at 7:45pm and a follow-up at 8:30pm.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You got back on track after a missed day. That's the hard part.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to log a note about what made today easier?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You've hit 50 check-ins total. Nice milestone!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would a reminder on your watch be easier to notice than one on your phone?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "If side effects or questions come up, reach out to your care team.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Long shifts this week? Want a reminder timed to your break?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your streak paused yesterday, but today is a fresh day.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want a quick recap of this week's check-ins?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "A glass of water by the bed might help you remember the evening check-in.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You've checked in at roughly the same time for eight days. Great rhythm.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would it help to set the reminder for when you usually get home?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Thanks for being honest about the missed days. Let's figure out a plan that fits.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Twelve days and counting!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to share your streak with your accountability buddy?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Questions about timing or refills? Your pharmacist can walk you through it.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "We'll check in again tomorrow at 8am.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "What would make the weekend routine feel lighter?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You logged every day during your trip. Impressive!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to try a reminder 10 minutes after your alarm?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Evenings seem packed lately. Want to move your check-in to lunchtime?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your check-in history shows steady consistency over the past two months.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Nice catch logging that late entry.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Would a sticky note on the fridge help as a backup reminder?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Remember to bring your list of questions to your appointment on Thursday.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Thirty days in a row. That's a whole month of consistency!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Not sure what to ask at your next visit? We can draft a short list together.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You checked in even on a busy travel day. Well done.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to set a reminder for refill pickup on Friday afternoon?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Seems like 9pm works better than 8pm for you. Want to make that the default?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Let's keep it simple: one reminder, one tap, done.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your doctor or pharmacist can answer questions about anything on your list.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "How's the new evening routine feeling after a week?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You've logged 2 glasses of water with every check-in this week.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Nice — you checked in within 5 minutes of your reminder all week.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to switch to a weekly planner view?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "A missed check-in is just information. What happened yesterday?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to try a morning and an evening check-in for the next few days?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "You're doing the work, one day at a time.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your reminders are paused until Monday. Enjoy the break!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Did your evening dose get logged? A quick tap here confirms it.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Your morning dose reminder is set for 7am.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Let's celebrate: 100 days of check-ins!", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Want to set a quiet reminder for 6pm on long workdays?", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "Nice job staying on schedule while your routine was shaken up.", "expected": "compliant", "rule_ids": [], "crisis_context": false}
+{"text": "I'm really glad you told me. Please call or text 988 right now to talk with someone.", "expected": "compliant", "rule_ids": [], "crisis_context": true}
+{"text": "You don't have to handle this alone. The Crisis Text Line is available any time.", "expected": "compliant", "rule_ids": [], "crisis_context": true}
+{"text": "If you might be in danger, please call 911 or go to the nearest emergency room.", "expected": "compliant", "rule_ids": [], "crisis_context": true}
+{"text": "Please reach out to emergency services if you feel unsafe right now.", "expected": "compliant", "rule_ids": [], "crisis_context": true}
+{"text": "A crisis line can connect you with someone tonight. In the US, dial 988.", "expected": "compliant", "rule_ids": [], "crisis_context": true}
+{"text": "If you're outside the US, please call your local emergency number.", "expected": "compliant", "rule_ids": [], "crisis_context": true}
