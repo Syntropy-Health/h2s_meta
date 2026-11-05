@@ -14,8 +14,16 @@ Base model: ``meta-models/Muse-Glimmer-30B`` (``MuseGlimmerForConditionalGenerat
 H100: LoRA sits on the language tower only (:func:`language_lora_targets`); the
 vision tower, adapter and projection stay frozen in bf16 and never run.
 
-2.4 boundary eval (base vs base+SFT vs base+DPO on held-out prompts, greedy, fixed seed);
-writes ``/vol/results/boundary_eval.json`` and a local copy to commit::
+Training (SFT then DPO), from ``engine/``, on Muse-realized data only (``train`` refuses
+offline/template datasets; HAC-28)::
+
+    python -m daypart.train.run --out /tmp/daypart-data          # Muse credentials, spend-capped
+    uv run --with modal modal deploy daypart/train/modal_app.py
+    uv run --with modal modal run daypart/train/modal_app.py::train --data-dir /tmp/daypart-data
+
+2.4 boundary eval (base vs base+SFT vs base+DPO on held-out prompts, greedy, fixed seed;
+adapters default to ``/vol/results/training.json``); writes ``/vol/results/boundary_eval.json``
+and a local copy to commit::
 
     uv run --with modal modal run daypart/train/modal_app.py::boundary_eval --out ../docs/daypart/results/boundary_eval.json
 
@@ -241,7 +249,7 @@ def dpo_train(
     trainer = DPOTrainer(
         model=model,
         ref_model=None,  # PEFT: TRL copies the SFT adapter into a frozen "ref" adapter
-        args=DPOConfig(beta=spec.beta, **_common_args(spec, max_steps)),
+        args=DPOConfig(beta=spec.beta, rpo_alpha=spec.rpo_alpha, **_common_args(spec, max_steps)),
         train_dataset=dataset,
         processing_class=tokenizer,
         callbacks=[timer],
@@ -302,8 +310,56 @@ def smoke(data_dir: str, base_model: str = BASE_MODEL, rows: int = 16, steps: in
         print("estimate", _cost_line(label, run, n, spec.epochs, spec.batch_size))
 
 
-SFT_ADAPTER = "adapters/daypart-sft-23866809bbd7"
-DPO_ADAPTER = "adapters/daypart-dpo-1e2af88136ca"
+TRAINING_RECORD = "results/training.json"
+
+
+@app.function(image=image, volumes=_VOLUMES, cpu=1, memory=2048, timeout=_TIMEOUT_S)
+def train_pipeline(sft_json: str, dpo_json: str) -> dict:
+    """SFT, then DPO from that adapter; writes ``/vol/results/training.json``. Spawn it on the deployed app."""
+    sft = sft_train.remote(sft_json)
+    dpo = dpo_train.remote(dpo_json)
+    record = {"sft": sft, "dpo": dpo}
+    volume.reload()
+    path = Path(_vol_path(TRAINING_RECORD))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    volume.commit()
+    return record
+
+
+@app.local_entrypoint()
+def train(data_dir: str, base_model: str = BASE_MODEL, dry_run: bool = False) -> None:
+    """Upload ``sft.jsonl``/``dpo.jsonl`` and spawn :func:`train_pipeline` on the DEPLOYED app.
+
+    Refuses offline/template datasets (``summary.json``). Run ``modal deploy daypart/train/modal_app.py``
+    first: the spawned call belongs to the deployed app, so it outlives this process. Poll it with
+    ``modal.FunctionCall.from_id(<id>).get(timeout=0)``; the record lands in ``/vol/results/training.json``.
+    """
+    from daypart.train.modal_jobs import check_trainable, dpo_spec, sft_spec
+
+    data = Path(data_dir)
+    summary = json.loads((data / "summary.json").read_text(encoding="utf-8"))
+    check_trainable(summary)
+    sft_path, dpo_path = data / "sft.jsonl", data / "dpo.jsonl"
+    sft = sft_spec(base_model, sft_path)
+    dpo = dpo_spec(base_model, dpo_path, f"adapters/{sft.name}")
+    n_sft, n_dpo = (sum(1 for _ in p.open()) for p in (sft_path, dpo_path))
+    print(f"train: {n_sft} SFT rows -> adapters/{sft.name}; {n_dpo} DPO pairs -> adapters/{dpo.name}")
+    print(f"  dpo: beta {dpo.beta}, lr {dpo.learning_rate}, rpo_alpha {dpo.rpo_alpha}; data from {summary['model_id']}")
+    if dry_run:
+        return
+    upload_datasets(sft_path, dpo_path)
+    call = modal.Function.from_name(APP_NAME, "train_pipeline").spawn(sft.model_dump_json(), dpo.model_dump_json())
+    print(f"spawned train_pipeline: {call.object_id}")
+
+
+def _trained_adapters() -> dict[str, str]:
+    """``{"sft": ..., "dpo": ...}`` volume-relative adapter paths from ``/vol/results/training.json``."""
+    try:
+        record = json.loads(b"".join(volume.read_file(TRAINING_RECORD)).decode("utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"no {TRAINING_RECORD} on volume {VOLUME_NAME} (run train first, or pass adapters): {exc}") from exc
+    return {m: str(PurePosixPath(record[m]["adapter"]).relative_to(VOL)) for m in ("sft", "dpo")}
 
 
 @app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
@@ -311,14 +367,19 @@ def boundary_generate(
     prompts_json: str,
     adapters_json: str,
     base_model: str = BASE_MODEL,
-    max_new_tokens: int = 192,
+    max_new_tokens: int = 512,
     batch_size: int = 16,
     seed: int = 0,
 ) -> dict:
-    """Greedy responses per model: ``base`` (adapters disabled) plus one per named adapter."""
+    """Greedy replies per model: ``base`` (adapters disabled) plus one per named adapter.
+
+    Decodes with special tokens kept and returns the ``to=user`` reply (``chat_format``) plus the raw text.
+    """
     import torch
     from peft import PeftModel
     from transformers import AutoModelForImageTextToText, AutoTokenizer, BitsAndBytesConfig
+
+    from daypart.train.chat_format import extract_reply
 
     t0 = time.monotonic()
     prompts = json.loads(prompts_json)
@@ -355,6 +416,7 @@ def boundary_generate(
     ]
 
     def _generate() -> list[str]:
+        """Raw decodes (special tokens kept), one per prompt."""
         out: list[str] = []
         for i in range(0, len(texts), batch_size):
             enc = tokenizer(texts[i : i + batch_size], return_tensors="pt", padding=True, add_special_tokens=False)
@@ -364,23 +426,25 @@ def boundary_generate(
                     **enc, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=tokenizer.pad_token_id
                 )
             new = ids[:, enc["input_ids"].shape[1] :]
-            out += [t.strip() for t in tokenizer.batch_decode(new, skip_special_tokens=True)]
+            out += tokenizer.batch_decode(new, skip_special_tokens=False)
         return out
 
-    responses: dict[str, list[str]] = {}
+    raws: dict[str, list[str]] = {}
     gen_s: dict[str, float] = {}
     for name in ["base", *adapters]:
         t = time.monotonic()
         if name == "base" and adapters:
             with model.disable_adapter():
-                responses[name] = _generate()
+                raws[name] = _generate()
         else:
             if name != "base":
                 model.set_adapter(name)
-            responses[name] = _generate()
+            raws[name] = _generate()
         gen_s[name] = round(time.monotonic() - t, 1)
+    responses = {name: [extract_reply(r) for r in raw] for name, raw in raws.items()}
     return {
         "responses": responses,
+        "raw": raws,
         "load_s": round(t_loaded - t0, 1),
         "gen_s": gen_s,
         "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 1),
@@ -399,11 +463,11 @@ def _volume_jsonl(path: str) -> list[dict]:
 def boundary_eval(
     out: str = "boundary_eval.json",
     max_prompts: int = 300,
-    max_new_tokens: int = 192,
+    max_new_tokens: int = 512,
     batch_size: int = 16,
     seed: int = 0,
-    sft_adapter: str = SFT_ADAPTER,
-    dpo_adapter: str = DPO_ADAPTER,
+    sft_adapter: str = "",
+    dpo_adapter: str = "",
     base_model: str = BASE_MODEL,
     dry_run: bool = False,
 ) -> None:
@@ -428,16 +492,26 @@ def boundary_eval(
     if dry_run:
         return
     adapters = {"sft": sft_adapter, "dpo": dpo_adapter}
+    if not all(adapters.values()):
+        adapters = {**_trained_adapters(), **{m: a for m, a in adapters.items() if a}}
+    print(f"adapters: {adapters}")
     gen = boundary_generate.remote(
         json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed
     )
-    scored = {m: [score_response(p, t) for p, t in zip(prompts, gen["responses"][m], strict=True)] for m in ("base", "sft", "dpo")}
+    scored = {
+        m: [
+            {**score_response(p, t), "raw": r}
+            for p, t, r in zip(prompts, gen["responses"][m], gen["raw"][m], strict=True)
+        ]
+        for m in ("base", "sft", "dpo")
+    }
     meta = {
         "base_model": base_model,
         "adapters": adapters,
         "seed": seed,
         "cohort_seed": cohort_seed,
         "decoding": "greedy",
+        "reply": "to=user channel of the chat template (special tokens kept, chat_format.extract_reply)",
         "max_new_tokens": max_new_tokens,
         "n_prompts": len(prompts),
         "n_excluded_training_turns": len(exclude),
@@ -454,7 +528,10 @@ def boundary_eval(
     Path(out).write_text(text, encoding="utf-8")
     for m in ("base", "sft", "dpo"):
         agg = report["models"][m]
-        print(f"{m:>4}: boundary {agg['boundary_pass_rate']:.3f}  rubric {agg['rubric_pass_rate']:.3f}  n={agg['n']}")
+        print(
+            f"{m:>4}: boundary {agg['boundary_pass_rate']:.3f}  rubric {agg['rubric_pass_rate']:.3f}  n={agg['n']}"
+            f"  degenerate {agg['degenerate']}  distinct {agg['distinct_responses']}"
+        )
     print("R3:", json.dumps(report["r3"]))
     print("R4:", json.dumps(report["r4"]))
     print(f"wrote {out} and {VOLUME_NAME}:/results/boundary_eval.json")
@@ -526,6 +603,8 @@ __all__ = [
     "prefetch_base",
     "sft_train",
     "smoke",
+    "train",
+    "train_pipeline",
     "upload_datasets",
     "volume",
 ]

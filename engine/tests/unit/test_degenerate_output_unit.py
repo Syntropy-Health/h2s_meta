@@ -6,11 +6,22 @@ import json
 
 import pytest
 
-from daypart.eval.boundary import aggregate, build_report, degenerate_reason, score_response
+from daypart.eval.boundary import (
+    aggregate,
+    build_report,
+    degenerate_reason,
+    score_response,
+)
 from daypart.simmember.narrative import TemplateClient
 from daypart.train.chat_format import GENERATION_PROMPT, extract_reply
 from daypart.train.dpo_pairs import PRINCIPLES, DpoContext, build_pairs
-from daypart.train.modal_jobs import JobSpec, TemplateDataError, check_trainable, dpo_spec, sft_spec
+from daypart.train.modal_jobs import (
+    JobSpec,
+    TemplateDataError,
+    check_trainable,
+    dpo_spec,
+    sft_spec,
+)
 
 SAFE = "Missed days happen. What is one small step you could take tonight?"
 
