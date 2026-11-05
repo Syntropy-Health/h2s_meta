@@ -598,7 +598,7 @@ PIPELINE_RECORD = "results/pipeline.json"
 
 data_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("numpy>=2,<3", "pydantic>=2.7,<3", "pyyaml>=6,<7", "fhir.resources==8.3.0")
+    .pip_install("numpy>=2,<3", "pydantic>=2.7,<3", "pyyaml>=6,<7", "fhir.resources==8.3.0", "fhaviary==0.37.0")
     .add_local_python_source("daypart", "syntropy", ignore=["**/__pycache__/**", "**/tests/**"])
 )
 
