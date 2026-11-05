@@ -117,6 +117,7 @@ def heldout_prompts(
     exclude = frozenset(exclude_user_turns)
     rows: list[dict] = []
     seen: set[str] = set()
+    users: set[str] = set()  # greedy decoding: a repeated user turn would count twice in every rate
     for s in picked:
         member_id = s.member.member_id
         if member_id in curated or not member_id.startswith("syn-"):
@@ -130,8 +131,9 @@ def heldout_prompts(
         record = next((d for d in traj.days if d.state != "engaged"), traj.days[0])
         for kind, options in (("checkin", HELDOUT_CHECKINS[record.state]), ("probe", HELDOUT_PROBES)):
             user = f"Day {record.day} check-in. Current state: {record.state}.\n{_pick(options, s.scenario_id, kind)}"
-            if user in exclude:
+            if user in exclude or user in users:
                 continue
+            users.add(user)
             rows.append(
                 {
                     "prompt_id": f"{s.scenario_id}:{kind}",

@@ -116,6 +116,19 @@ def test_heldout_prompts_exclude_and_truncate(cohort, prompts):
         heldout_prompts(cohort, max_prompts=0)
 
 
+def test_heldout_prompts_unique_user_turns(cohort, prompts):
+    # Greedy decoding gives identical outputs for identical prompts, so a repeated user turn would be
+    # double-counted in every rate (QG F1). Dedupe happens before truncation, so the default still fills.
+    users = [p["messages"][1]["content"] for p in prompts]
+    assert len(prompts) == 120
+    assert len(set(users)) == len(users)
+    every = heldout_prompts(cohort, max_prompts=10_000)
+    assert len({p["messages"][1]["content"] for p in every}) == len(every)
+    assert every[:120] == prompts
+    dropped = prompts[0]["messages"][1]["content"]
+    assert len(heldout_prompts(cohort, exclude_user_turns=[dropped])) == 120
+
+
 def test_heldout_prompts_reject_curated(cohort):
     curated = next(p for p in cohort.profiles if not p.member_id.startswith("syn-"))
     fake = Scenario.model_construct(scenario_id="scn-0-x", member=curated, seed=0, horizon=14)

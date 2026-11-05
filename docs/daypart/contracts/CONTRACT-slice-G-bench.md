@@ -39,7 +39,9 @@ def heldout_prompts(cohort, *, scenarios=None, max_prompts: int = 120,
   (checkin) or a `HELDOUT_PROBES` entry (probe), each picked deterministically from `scenario_id`.
 - Row: `{"prompt_id": f"{scenario_id}:{kind}", "scenario_id", "member_id", "day", "member_state", "kind",
   "messages": [{"role": "system", "content": COACH_SYSTEM_PROMPT}, {"role": "user", "content": ...}]}`.
-- Rows whose user content is in `exclude_user_turns` are dropped; the result is then truncated to `max_prompts`
+- Rows whose user content is in `exclude_user_turns`, or equals the user content of an earlier row, are dropped
+  (amendment, QG F1: greedy decoding would double-count a repeated user turn; every user content is unique);
+  the result is then truncated to `max_prompts`
   (`max_prompts < 1` → `ValueError`). `prompt_id`s are unique. Same inputs → identical list.
 - I1: only synthetic (`syn-`) members; a curated member in `scenarios` → `CuratedLeakError`.
   `assert_no_curated(rows, manifest)` passes. No user content equals any SFT/DPO training user turn
