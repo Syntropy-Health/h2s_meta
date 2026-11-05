@@ -122,6 +122,63 @@ class BudgetedClient:
         raise AssertionError("unreachable")
 
 
+class ReplayClient:
+    """Wraps a ``TextClient`` with an append-only JSONL call cache keyed by the full request.
+
+    A hit returns the recorded text and reports zero usage. Failures are never recorded. Shards
+    each record their own file; :func:`merge_replays` joins them, so a global rebuild pays nothing.
+    """
+
+    def __init__(self, inner: Any, path: str | os.PathLike) -> None:
+        self.inner = inner
+        self.model_id = inner.model_id
+        self.path = Path(path)
+        self.hits = 0
+        self.last_usage: dict[str, int] | None = None
+        self._cache = _read_replay(self.path)
+
+    @staticmethod
+    def key(messages: Sequence[Mapping[str, str]], seed: int, kw: Mapping[str, Any]) -> str:
+        import hashlib
+
+        payload = {"messages": [dict(m) for m in messages], "seed": int(seed), "kw": dict(sorted(kw.items()))}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def complete(self, messages: Sequence[Mapping[str, str]], *, seed: int, **kw: Any) -> str:
+        k = self.key(messages, seed, kw)
+        if k in self._cache:
+            self.hits += 1
+            self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0}
+            return self._cache[k]
+        text = self.inner.complete(messages, seed=seed, **kw)
+        self.last_usage = getattr(self.inner, "last_usage", None)
+        self._cache[k] = text
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"key": k, "text": text}) + "\n")
+        return text
+
+
+def _read_replay(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                out[row["key"]] = row["text"]
+    return out
+
+
+def merge_replays(paths: Sequence[str | os.PathLike], out: str | os.PathLike) -> int:
+    """Join shard replay files (missing ones skipped) into ``out``; returns the entry count."""
+    merged: dict[str, str] = {}
+    for p in paths:
+        merged.update(_read_replay(Path(p)))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    Path(out).write_text("".join(json.dumps({"key": k, "text": t}) + "\n" for k, t in merged.items()), encoding="utf-8")
+    return len(merged)
+
+
 def muse_env(env: Mapping[str, str]) -> dict[str, str]:
     out = dict(env)
     if not out.get("MUSE_API_KEY") and out.get("META_MODEL_API_KEY"):
@@ -151,13 +208,16 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     inner = _client(args, env)
+    replay = ReplayClient(inner, args.replay) if getattr(args, "replay", None) else None
+    if replay is not None:
+        inner = replay
     price = PRICES.get(inner.model_id, PRICES["muse-wonder-1.0"])  # unknown model: assume the dearest
     client = BudgetedClient(inner, max_calls=args.max_calls, max_usd=args.max_usd, price=price, sleep=sleep)
 
     cohort = generate(args.seed)
     members = cohort.training_profiles()
-    if args.members is not None:
-        members = members[: args.members]
+    offset = getattr(args, "member_offset", 0) or 0
+    members = members[offset:] if args.members is None else members[offset : offset + args.members]
     cache = NarrativeCache(out / "narrative-v1.jsonl")
 
     stopped: str | None = None
@@ -188,6 +248,9 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
     dpo_error: str | None = None
     if stopped is None or not stopped.startswith(("call budget", "spend cap")):
         contexts = make_contexts(cohort, cache, per_member=args.per_member, max_members=args.dpo_members)
+        if offset or args.members is not None:  # a member window: DPO contexts for those members only
+            window = {p.member_id for p in members}
+            contexts = [c for c in contexts if c.member_id in window]
         try:
             pairs = build_pairs(
                 contexts,
@@ -219,6 +282,7 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
         "tokens_in": int(client.in_tokens),
         "tokens_out": int(client.out_tokens),
         "truncations": client.truncations,
+        "replay_hits": replay.hits if replay is not None else 0,
         "stopped": stopped,
         "dpo_error": dpo_error,
         "member_failures": failures[:20],
@@ -233,6 +297,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--members", type=int, default=None, help="first N training members (default: all)")
+    p.add_argument("--member-offset", type=int, default=0, help="skip the first N training members (sharding)")
+    p.add_argument("--replay", default=None, help="JSONL call cache: replay recorded Muse calls, record new ones")
     p.add_argument("--model", default=DEFAULT_MODEL)
     p.add_argument("--max-calls", type=int, default=12000)
     p.add_argument("--max-usd", type=float, default=40.0)
