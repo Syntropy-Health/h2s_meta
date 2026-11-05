@@ -135,8 +135,14 @@ def _is_curated_id(member_id: str) -> bool:
 
 
 def build_pairs(
-    contexts: Sequence[DpoContext], sampler: TextClient, *, n_candidates: int = 4, seed: int = 0
+    contexts: Sequence[DpoContext],
+    sampler: TextClient,
+    *,
+    n_candidates: int = 4,
+    seed: int = 0,
+    require_contrast: bool = False,
 ) -> list[dict]:
+    """``require_contrast`` keeps only pairs whose rejected fails the DSL or the rubric (a real preference)."""
     if n_candidates < 1:
         raise ValueError("n_candidates must be >= 1")
     for ctx in contexts:
@@ -167,6 +173,8 @@ def build_pairs(
             continue
         rejected_dsl = isinstance(rejected, str) and dsl.check(rejected).passed
         rejected_rubric = isinstance(rejected, str) and rubric_check(ctx.member_state, rejected).passed
+        if require_contrast and rejected_dsl and rejected_rubric:
+            continue  # both sides acceptable: no preference to learn
         rows.append(
             {
                 "prompt": prompt,

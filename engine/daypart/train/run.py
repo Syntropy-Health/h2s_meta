@@ -10,8 +10,11 @@
 
 Credentials come from the environment only. ``MUSE_API_KEY`` falls back to
 ``META_MODEL_API_KEY``; ``MUSE_BASE_URL`` defaults to the Meta model API.
-Spend is capped twice: a hard call budget and a USD estimate (chars/4 token
-approximation at the model's list price). Either cap stops the run cleanly;
+Spend is capped twice: a hard call budget and a USD estimate at the model's
+list price, from the reported ``usage`` token counts (reasoning tokens are in
+``completion_tokens``; chars/4 only when a client reports no usage). Muse
+reasoning models get ``--reasoning-effort`` (default ``minimal``); a reply
+truncated before any content is retried with double ``max_tokens``. Either cap stops the run cleanly;
 what was cached so far is kept. ``--offline`` swaps in ``TemplateClient``.
 """
 
@@ -56,6 +59,7 @@ class BudgetedClient:
         price: tuple[float, float],
         retries: int = 4,
         backoff_s: float = 2.0,
+        max_tokens_cap: int = 2048,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.inner = inner
@@ -66,25 +70,45 @@ class BudgetedClient:
         self.retries = retries
         self.backoff_s = backoff_s
         self.sleep = sleep
+        self.max_tokens_cap = max_tokens_cap
         self.calls = 0
-        self.in_chars = 0
-        self.out_chars = 0
+        self.in_tokens: float = 0
+        self.out_tokens: float = 0
+        self.truncations = 0
 
     @property
     def est_usd(self) -> float:
         p_in, p_out = self.price
-        return (self.in_chars / 4) * p_in / 1e6 + (self.out_chars / 4) * p_out / 1e6
+        return self.in_tokens * p_in / 1e6 + self.out_tokens * p_out / 1e6
+
+    def _bill(self, messages: Sequence[Mapping[str, str]], text: str | None) -> None:
+        usage = getattr(self.inner, "last_usage", None)
+        if usage:
+            self.in_tokens += usage["prompt_tokens"]
+            self.out_tokens += usage["completion_tokens"]
+        else:
+            self.in_tokens += sum(len(m["content"]) for m in messages) / 4
+            self.out_tokens += len(text or "") / 4
 
     def complete(self, messages: Sequence[Mapping[str, str]], *, seed: int, **kw: Any) -> str:
         if self.calls >= self.max_calls:
             raise BudgetExceeded(f"call budget reached ({self.max_calls})")
         if self.est_usd >= self.max_usd:
             raise BudgetExceeded(f"spend cap reached (est ${self.est_usd:.2f} >= ${self.max_usd:.2f})")
+        from daypart.simmember.narrative import TruncatedResponseError
+
         self.calls += 1
-        self.in_chars += sum(len(m["content"]) for m in messages)
+        max_tokens = int(kw.pop("max_tokens", 256))
         for attempt in range(self.retries + 1):
             try:
-                text = self.inner.complete(messages, seed=seed, **kw)
+                text = self.inner.complete(messages, seed=seed, max_tokens=max_tokens, **kw)
+            except TruncatedResponseError:
+                self._bill(messages, None)
+                self.truncations += 1
+                if max_tokens * 2 > self.max_tokens_cap or attempt == self.retries:
+                    raise
+                max_tokens *= 2
+                continue
             except urllib.error.HTTPError as exc:
                 if exc.code not in _RETRYABLE_HTTP or attempt == self.retries:
                     raise
@@ -92,10 +116,67 @@ class BudgetedClient:
                 if attempt == self.retries:
                     raise
             else:
-                self.out_chars += len(text)
+                self._bill(messages, text)
                 return text
             self.sleep(self.backoff_s * (2**attempt))
         raise AssertionError("unreachable")
+
+
+class ReplayClient:
+    """Wraps a ``TextClient`` with an append-only JSONL call cache keyed by the full request.
+
+    A hit returns the recorded text and reports zero usage. Failures are never recorded. Shards
+    each record their own file; :func:`merge_replays` joins them, so a global rebuild pays nothing.
+    """
+
+    def __init__(self, inner: Any, path: str | os.PathLike) -> None:
+        self.inner = inner
+        self.model_id = inner.model_id
+        self.path = Path(path)
+        self.hits = 0
+        self.last_usage: dict[str, int] | None = None
+        self._cache = _read_replay(self.path)
+
+    @staticmethod
+    def key(messages: Sequence[Mapping[str, str]], seed: int, kw: Mapping[str, Any]) -> str:
+        import hashlib
+
+        payload = {"messages": [dict(m) for m in messages], "seed": int(seed), "kw": dict(sorted(kw.items()))}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def complete(self, messages: Sequence[Mapping[str, str]], *, seed: int, **kw: Any) -> str:
+        k = self.key(messages, seed, kw)
+        if k in self._cache:
+            self.hits += 1
+            self.last_usage = {"prompt_tokens": 0, "completion_tokens": 0}
+            return self._cache[k]
+        text = self.inner.complete(messages, seed=seed, **kw)
+        self.last_usage = getattr(self.inner, "last_usage", None)
+        self._cache[k] = text
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"key": k, "text": text}) + "\n")
+        return text
+
+
+def _read_replay(path: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                out[row["key"]] = row["text"]
+    return out
+
+
+def merge_replays(paths: Sequence[str | os.PathLike], out: str | os.PathLike) -> int:
+    """Join shard replay files (missing ones skipped) into ``out``; returns the entry count."""
+    merged: dict[str, str] = {}
+    for p in paths:
+        merged.update(_read_replay(Path(p)))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    Path(out).write_text("".join(json.dumps({"key": k, "text": t}) + "\n" for k, t in merged.items()), encoding="utf-8")
+    return len(merged)
 
 
 def muse_env(env: Mapping[str, str]) -> dict[str, str]:
@@ -113,7 +194,8 @@ def _client(args: argparse.Namespace, env: Mapping[str, str]) -> Any:
 
     if args.offline:
         return TemplateClient()
-    return MuseClient(model_id=args.model, env=muse_env(env))
+    effort = getattr(args, "reasoning_effort", "minimal")
+    return MuseClient(model_id=args.model, env=muse_env(env), reasoning_effort=None if effort == "none" else effort)
 
 
 def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep=time.sleep) -> dict:
@@ -126,13 +208,16 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     inner = _client(args, env)
+    replay = ReplayClient(inner, args.replay) if getattr(args, "replay", None) else None
+    if replay is not None:
+        inner = replay
     price = PRICES.get(inner.model_id, PRICES["muse-wonder-1.0"])  # unknown model: assume the dearest
     client = BudgetedClient(inner, max_calls=args.max_calls, max_usd=args.max_usd, price=price, sleep=sleep)
 
     cohort = generate(args.seed)
     members = cohort.training_profiles()
-    if args.members is not None:
-        members = members[: args.members]
+    offset = getattr(args, "member_offset", 0) or 0
+    members = members[offset:] if args.members is None else members[offset : offset + args.members]
     cache = NarrativeCache(out / "narrative-v1.jsonl")
 
     stopped: str | None = None
@@ -163,8 +248,17 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
     dpo_error: str | None = None
     if stopped is None or not stopped.startswith(("call budget", "spend cap")):
         contexts = make_contexts(cohort, cache, per_member=args.per_member, max_members=args.dpo_members)
+        if offset or args.members is not None:  # a member window: DPO contexts for those members only
+            window = {p.member_id for p in members}
+            contexts = [c for c in contexts if c.member_id in window]
         try:
-            pairs = build_pairs(contexts, client, n_candidates=args.n_candidates, seed=args.seed)
+            pairs = build_pairs(
+                contexts,
+                client,
+                n_candidates=args.n_candidates,
+                seed=args.seed,
+                require_contrast=getattr(args, "require_contrast", True),
+            )
         except BudgetExceeded as exc:
             dpo_error = str(exc)
         except Exception as exc:
@@ -185,6 +279,10 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
         "dpo_sha256": dpo_sha,
         "calls": client.calls,
         "est_usd": round(client.est_usd, 4),
+        "tokens_in": int(client.in_tokens),
+        "tokens_out": int(client.out_tokens),
+        "truncations": client.truncations,
+        "replay_hits": replay.hits if replay is not None else 0,
         "stopped": stopped,
         "dpo_error": dpo_error,
         "member_failures": failures[:20],
@@ -199,14 +297,27 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--members", type=int, default=None, help="first N training members (default: all)")
+    p.add_argument("--member-offset", type=int, default=0, help="skip the first N training members (sharding)")
+    p.add_argument("--replay", default=None, help="JSONL call cache: replay recorded Muse calls, record new ones")
     p.add_argument("--model", default=DEFAULT_MODEL)
     p.add_argument("--max-calls", type=int, default=12000)
     p.add_argument("--max-usd", type=float, default=40.0)
+    p.add_argument(
+        "--reasoning-effort",
+        default="minimal",
+        help="Muse reasoning_effort (minimal|low|medium|high|max; 'none' omits the field)",
+    )
     p.add_argument("--refusal-ratio", type=float, default=0.2)
     p.add_argument("--per-member", type=int, default=2)
     p.add_argument("--dpo-members", type=int, default=None)
     p.add_argument("--n-candidates", type=int, default=4)
     p.add_argument("--max-consecutive-failures", type=int, default=5)
+    p.add_argument(
+        "--require-contrast",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="DPO: keep only pairs whose rejected fails the DSL or rubric (default on)",
+    )
     p.add_argument("--offline", action="store_true", help="TemplateClient instead of Muse (no network)")
     return p.parse_args(argv)
 

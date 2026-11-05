@@ -260,3 +260,62 @@ def test_realize_guards(cohort, tmp_path):
     with pytest.raises(CuratedLeakError):
         realize(cur, cohort.trajectories[cur.member_id], client, cache)
     assert client.calls == [] and len(cache) == 0 and not (tmp_path / "c.jsonl").exists()
+
+
+# ---------------------------------------------------------------- HAC-28: reasoning models
+
+
+class _JsonResp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _serve(monkeypatch, payload, seen=None):
+    def fake_urlopen(req, timeout):
+        if seen is not None:
+            seen["body"] = json.loads(req.data)
+        return _JsonResp(json.dumps(payload).encode())
+
+    monkeypatch.setattr(nar.urllib.request, "urlopen", fake_urlopen)
+
+
+def test_muse_sends_minimal_reasoning_effort_by_default(monkeypatch):
+    seen = {}
+    _serve(monkeypatch, {"choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}]}, seen)
+    MuseClient(env=ENV).complete([{"role": "user", "content": "x"}], seed=1)
+    assert seen["body"]["reasoning_effort"] == "minimal"
+
+
+def test_muse_reasoning_effort_configurable_and_omittable(monkeypatch):
+    seen = {}
+    _serve(monkeypatch, {"choices": [{"message": {"content": "hi"}}]}, seen)
+    MuseClient(env=ENV, reasoning_effort="low").complete([{"role": "user", "content": "x"}], seed=1)
+    assert seen["body"]["reasoning_effort"] == "low"
+    MuseClient(env={**ENV, "MUSE_REASONING_EFFORT": "medium"}).complete([{"role": "user", "content": "x"}], seed=1)
+    assert seen["body"]["reasoning_effort"] == "medium"
+    MuseClient(env=ENV, reasoning_effort=None).complete([{"role": "user", "content": "x"}], seed=1)
+    assert "reasoning_effort" not in seen["body"]
+
+
+@pytest.mark.parametrize("content", [None, ""])
+def test_muse_truncated_reasoning_is_typed(monkeypatch, content):
+    usage = {"prompt_tokens": 40, "completion_tokens": 256, "completion_tokens_details": {"reasoning_tokens": 254}}
+    _serve(monkeypatch, {"choices": [{"message": {"content": content}, "finish_reason": "length"}], "usage": usage})
+    c = MuseClient(env=ENV)
+    with pytest.raises(nar.TruncatedResponseError) as ei:
+        c.complete([{"role": "user", "content": "x"}], seed=1)
+    assert ei.value.max_tokens == 256
+    assert c.last_usage == {"prompt_tokens": 40, "completion_tokens": 256}
+
+
+def test_muse_records_usage(monkeypatch):
+    _serve(monkeypatch, {"choices": [{"message": {"content": "hi"}}], "usage": {"prompt_tokens": 7, "completion_tokens": 30}})
+    c = MuseClient(env=ENV)
+    assert c.complete([{"role": "user", "content": "x"}], seed=1) == "hi"
+    assert c.last_usage == {"prompt_tokens": 7, "completion_tokens": 30}
+    _serve(monkeypatch, {"choices": [{"message": {"content": "hi"}}]})
+    c.complete([{"role": "user", "content": "x"}], seed=1)
+    assert c.last_usage is None

@@ -23,6 +23,9 @@ class MuseClient:                      # satisfies TextClient; the only network 
     def __init__(self, *, model_id: str | None = None, env: Mapping[str, str] | None = None) -> None
 ```
 - `MuseClient` reads `MUSE_API_KEY`, `MUSE_BASE_URL` and (when `model_id` is None) `MUSE_SPARK_MODEL` from `env` (default `os.environ`). Any missing/empty → `MissingCredentialsError` naming the missing variable names (never their values). Construction does **no** network I/O. `complete` POSTs an OpenAI-compatible chat-completions request (`{base}/chat/completions`, bearer auth, stdlib `urllib` only) and returns the first choice's message content. `repr(client)` never contains the key.
+- **Reasoning models (HAC-28 amendment).** `MuseClient(..., reasoning_effort: str | None = <unset>)`: when unset, it uses `env["MUSE_REASONING_EFFORT"]`, else `"minimal"`; `None` omits the field. When set, every request body carries `"reasoning_effort": <value>`. If the first choice's content is `null` or `""` and `finish_reason == "length"`, `complete` raises `TruncatedResponseError` (a `ValueError` subclass, with attribute `max_tokens` set to the request's value) instead of returning or crashing. After every response, `client.last_usage` is `{"prompt_tokens": int, "completion_tokens": int}` when the response reports `usage`, else `None`.
+- **Run-phase spend (`daypart.train.run.BudgetedClient`, HAC-28 amendment).** Spend comes from the inner client's `last_usage` tokens (reasoning tokens are part of `completion_tokens`). A client with no usage falls back to chars/4. `in_tokens`/`out_tokens` accumulate over **every billed attempt**, truncated ones included. On `TruncatedResponseError` it retries the same logical call with `max_tokens` doubled, up to `max_tokens_cap` (default 2048), then re-raises. `calls` counts logical calls. `run --reasoning-effort X` (default `minimal`, `none` omits it) passes the value through. `summary.json` adds `tokens_in`, `tokens_out` and `truncations`.
+- **Sharded realization (`daypart.train.run`, HAC-28 amendment).** `ReplayClient(inner, path)` keys each call by `sha256(messages, seed, sorted kwargs)`. A hit returns the recorded text with `last_usage == {"prompt_tokens": 0, "completion_tokens": 0}`; a miss calls `inner` and appends `{"key", "text"}` to `path`. Failures are never recorded; a fresh instance reloads `path`. `merge_replays(paths, out) -> int` unions the files (missing files are skipped). `run --member-offset N --members K` realizes training members `[N, N+K)` and only their DPO contexts. `run --replay PATH` wraps the client, and `summary.json["replay_hits"]` counts the hits. Replaying a recorded window gives identical `sft_sha256`/`dpo_sha256`.
 - `TemplateClient(model_id: str = "template-v1")` satisfies `TextClient`: deterministic, offline, no I/O. Output depends only on `(messages, seed)`; it picks from a fixed pool of short synthetic texts. Used by the I1 gate and by tests that need *a* client. Its texts must all pass `post` (F3) — for the journal pool, the dialogue pool and the refusal pool alike.
 
 ## F2. Prompts
@@ -124,13 +127,14 @@ class DpoContext(pydantic.BaseModel, frozen=True):          # extra="forbid"
     user_turn: str            # the member-facing context + journal; no member id inside
 
 def make_contexts(cohort: Cohort, cache: NarrativeCache, *, per_member: int = 2, max_members: int | None = None) -> list[DpoContext]
-def build_pairs(contexts: Sequence[DpoContext], sampler: TextClient, *, n_candidates: int = 4, seed: int = 0) -> list[dict]
+def build_pairs(contexts: Sequence[DpoContext], sampler: TextClient, *, n_candidates: int = 4, seed: int = 0, require_contrast: bool = False) -> list[dict]
 ```
 - `make_contexts`: training profiles only; per member, up to `per_member` days that have a passing journal in the cache, preferring non-`engaged` states, then earlier days. Deterministic. Curated rows in the cache are ignored.
 - `build_pairs` is pure over `sampler` (only `sampler.complete` is called). Per context:
   - **chosen candidates:** up to `n_candidates` samples of `[{"role": "system", "content": COACH_SYSTEM_PROMPT + "\n\n" + PRINCIPLES}, {"role": "user", "content": user_turn}]` with seeds derived from `(seed, context, i)`; chosen = the first that passes `post` (layer 0 + DSL) **and** `rubric_check(member_state, text).passed`. None qualifies → no pair for this context.
   - **rejected:** one sample of the **unconstrained** same context `[{"role": "system", "content": COACH_SYSTEM_PROMPT}, {"role": "user", "content": user_turn}]` (no `PRINCIPLES`), distinct seed. Identical to chosen → no pair.
   - Row: `{"prompt": [{"role": "system", "content": COACH_SYSTEM_PROMPT}, {"role": "user", "content": user_turn}], "chosen": [{"role": "assistant", "content": chosen}], "rejected": [{"role": "assistant", "content": rejected}], "meta": {"member_id", "day", "member_state", "rubric_version": RUBRIC_VERSION, "rejected_dsl_passed": bool, "rejected_rubric_passed": bool}}`.
+  - `require_contrast=True` (HAC-28) also drops the pair when the rejected text passes **both** `dsl.check` and `rubric_check` (no preference to learn). The call sequence is unchanged. `python -m daypart.train.run` passes `--require-contrast` (default on; `--no-require-contrast` turns it off).
   - The principled call sequence is exactly: candidate samples in order, stopping at the first qualifying one; then exactly one unconstrained call. A sampler exception propagates.
 - `n_candidates < 1` → `ValueError`. Curated `member_id` in any context → `CuratedLeakError` before any sampler call.
 - Registered in `BUILDERS` as `"train.dpo_pairs"` (TemplateClient sampler, ≤ 20 training members).
@@ -157,6 +161,7 @@ class JobSpec(pydantic.BaseModel, frozen=True):             # extra="forbid"
     max_seq_len: int = 2048         # >= 1
     seed: int = 0
     beta: float | None = None       # dpo: required, > 0 (default via dpo_spec 0.1); sft: must be None
+    rpo_alpha: float | None = None  # dpo: None or >= 0 (default via dpo_spec 1.0); sft: must be None
     init_adapter: str | None = None # dpo: required non-empty (the SFT adapter); sft: must be None
     gpu: str = "H100"
     timeout_s: int = 14400          # >= 60
@@ -169,8 +174,15 @@ class JobSpec(pydantic.BaseModel, frozen=True):             # extra="forbid"
     def checkpoint_dir(self) -> str # f"checkpoints/{name}"
 
 def sft_spec(base_model: str, dataset: str | os.PathLike, *, volume_path: str | None = None, **overrides) -> JobSpec
-def dpo_spec(base_model: str, dataset: str | os.PathLike, init_adapter: str, *, volume_path: str | None = None, beta: float = 0.1, **overrides) -> JobSpec
+def dpo_spec(base_model: str, dataset: str | os.PathLike, init_adapter: str, *, volume_path: str | None = None, beta: float = 0.1, learning_rate: float = DPO_LEARNING_RATE, rpo_alpha: float | None = DPO_RPO_ALPHA, **overrides) -> JobSpec
+
+DPO_LEARNING_RATE = 1e-5    # HAC-28: 2e-4 (the SFT LoRA rate) collapsed the DPO policy to special tokens
+DPO_RPO_ALPHA = 1.0         # RPO weight: NLL on chosen, anchors the policy
+
+class TemplateDataError(ValueError): ...
+def check_trainable(summary: Mapping[str, Any]) -> None
 ```
+- `check_trainable(summary)` (a `run` `summary.json` dict) raises `TemplateDataError` unless `summary["offline"] is False` and `summary["model_id"]` is non-empty and does not start with `"template"` (HAC-28: SFT trained on `TemplateClient` output collapsed to its pool). Missing keys → `TemplateDataError`.
 - `sft_spec`/`dpo_spec` hash the local `dataset` file's bytes into `dataset_sha256`; `dataset_path` = `volume_path` or `f"datasets/{basename}"`. Missing file → `FileNotFoundError`. An empty file → `ValueError`. Plan 2.2: `sft_spec(...).lora.rank == 8`.
 - Constraint violations (kind/beta/init_adapter mismatch, bad hex, ranges, unknown keys) → `pydantic.ValidationError`. `JobSpec.model_validate(json.loads(spec.model_dump_json())) == spec` (round-trip).
 
@@ -214,8 +226,21 @@ def plan_pipeline(base_model: str, sft_dataset: str | os.PathLike, dpo_dataset: 
 ```
 Returns the SFT spec and a function `adapter -> dpo JobSpec` (init_adapter = the SFT adapter). DPO is only built from a finished SFT adapter.
 
-`daypart/train/modal_app.py` (deploy-only; `modal deploy`): a `modal.App("daypart-train")` with GPU functions `sft_train(spec_json: str, resume_from: str | None) -> dict` and `dpo_train(...)` (TRL + PEFT in the image), a `modal.Volume` for datasets/checkpoints/adapters, writing checkpoints under `spec.checkpoint_dir` and returning `{"adapter": ...}`. Plus `ModalSdkBackend` (in `modal_app.py` or a module that imports `modal` lazily inside methods) implementing `ModalBackend` over `modal.Function.from_name(...).spawn(...)` / `modal.FunctionCall.from_id(...)`. Not covered by sealed tests (needs credentials); must not be imported by `daypart.train.__init__`.
+`daypart/train/modal_app.py` (deploy-only; `modal deploy`): a `modal.App("daypart-train")` with GPU functions `sft_train(spec_json: str, resume_from: str | None) -> dict` and `dpo_train(...)` (TRL + PEFT in the image), a `modal.Volume` for datasets/checkpoints/adapters, writing checkpoints under `spec.checkpoint_dir` and returning `{"adapter": ...}`. `dpo_train` passes `beta` to `DPOConfig`, and a truthy `rpo_alpha` as `loss_type=["sigmoid", "sft"]`, `loss_weights=[1.0, rpo_alpha]` (TRL 1.17 has no `rpo_alpha` field). A `train(data_dir)` local entrypoint calls `check_trainable` on `data_dir/summary.json`, uploads, and spawns `train_pipeline` (SFT then DPO, writes `/vol/results/training.json`) on the deployed app. Plus `ModalSdkBackend` (in `modal_app.py` or a module that imports `modal` lazily inside methods) implementing `ModalBackend` over `modal.Function.from_name(...).spawn(...)` / `modal.FunctionCall.from_id(...)`. Not covered by sealed tests (needs credentials); must not be imported by `daypart.train.__init__`.
 
 ## F7. Out of scope here (run phase, needs secrets)
 
 Realizing narratives with `MuseClient`, building the committed datasets, launching SFT then DPO via `JobRunner`, and 2.4 eval (base vs SFT boundary compliance with a pre-registered margin; lapse-recovery rubric SFT vs DPO using `rubric_check`; zero boundary regression) into the HAC-4 `metrics.json`. Contracted separately once secrets are bound.
+
+## F8. Chat-template reply — `daypart.train.chat_format` (pure; HAC-28)
+
+```python
+GENERATION_PROMPT = "<|start|>assistant"
+def extract_reply(continuation: str) -> str
+```
+Muse Glimmer renders an assistant reply as `<|start|>assistant to=<recipient><|message|>TEXT<|eot|>` (or `<|eom|>`). Reasoning goes to `to=self`, tool calls to `to=<tool>`. The generation prompt ends at `GENERATION_PROMPT`. `continuation` is the generation decoded with special tokens kept. `extract_reply` prepends `GENERATION_PROMPT`, drops `<|finetune_right_pad|>`, splits on `<|start|>`, and returns the stripped body of the **last** segment that meets all of these:
+- its header (the text before `<|message|>`) starts with the word `assistant`;
+- its last `to=` recipient is `user`, or it has no recipient;
+- the body is cut at the first `<|eot|>`, `<|eom|>` or `<|end_of_text|>`, or runs to the end if none.
+
+No such segment → `""`. That covers an empty generation, special tokens only, reasoning cut off before a reply, and tool calls only.

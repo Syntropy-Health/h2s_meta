@@ -344,9 +344,9 @@ def test_committed_training_record_summarizes():
     rec = dd.load_training(dd.default_metrics_path().parent)
     assert rec is not None
     s = training_summary(rec, "sft")
-    assert s["steps"] == 1018 and s["rows"] == 4072 and round(s["train_loss"], 3) == 0.084
+    assert s["steps"] == 1010 and s["rows"] == 4040 and round(s["train_loss"], 3) == 0.262
     d = training_summary(rec, "dpo")
-    assert d["steps"] == 78 and round(d["reward_margin"], 2) == 0.96
+    assert d["steps"] == 22 and d["rows"] == 84 and round(d["reward_margin"], 2) == 0.50
 
 
 def test_committed_metrics_match_harness(monkeypatch):
