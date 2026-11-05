@@ -26,6 +26,7 @@ include = ["daypart*"]
 
 [tool.setuptools.package-data]
 "daypart.membrane" = ["rules/*.yaml"]
+"daypart.eval" = ["runs.yaml"]
 
 [tool.pytest.ini_options]
 addopts = ""
