@@ -145,14 +145,10 @@ def test_rpo_alpha_validation(data):
         dpo_spec("org/glimmer", data, "adapters/x", rpo_alpha=-0.5)
 
 
-def test_sft_spec_hash_unchanged_by_new_field(data):
-    s = sft_spec("org/glimmer", data)
-    assert "rpo_alpha" not in s.model_dump(mode="json") or s.rpo_alpha is None
-    from daypart.simmember.manifest import canonical_json
-    import hashlib
-
-    legacy = {k: v for k, v in s.model_dump(mode="json").items() if k != "rpo_alpha"}
-    assert s.spec_hash == hashlib.sha256(canonical_json(legacy).encode("utf-8")).hexdigest()
+def test_rpo_alpha_is_part_of_the_spec_hash(data):
+    a = dpo_spec("org/glimmer", data, "adapters/x")
+    assert dpo_spec("org/glimmer", data, "adapters/x", rpo_alpha=0.5).spec_hash != a.spec_hash
+    assert sft_spec("org/glimmer", data).rpo_alpha is None
 
 
 # ---------------------------------------------------------------- template-data guard

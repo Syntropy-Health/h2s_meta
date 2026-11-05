@@ -164,7 +164,13 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
     if stopped is None or not stopped.startswith(("call budget", "spend cap")):
         contexts = make_contexts(cohort, cache, per_member=args.per_member, max_members=args.dpo_members)
         try:
-            pairs = build_pairs(contexts, client, n_candidates=args.n_candidates, seed=args.seed)
+            pairs = build_pairs(
+                contexts,
+                client,
+                n_candidates=args.n_candidates,
+                seed=args.seed,
+                require_contrast=getattr(args, "require_contrast", True),
+            )
         except BudgetExceeded as exc:
             dpo_error = str(exc)
         except Exception as exc:
@@ -207,6 +213,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--dpo-members", type=int, default=None)
     p.add_argument("--n-candidates", type=int, default=4)
     p.add_argument("--max-consecutive-failures", type=int, default=5)
+    p.add_argument(
+        "--require-contrast",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="DPO: keep only pairs whose rejected fails the DSL or rubric (default on)",
+    )
     p.add_argument("--offline", action="store_true", help="TemplateClient instead of Muse (no network)")
     return p.parse_args(argv)
 

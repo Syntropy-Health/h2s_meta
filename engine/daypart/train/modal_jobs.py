@@ -11,10 +11,10 @@ import hashlib
 import os
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 import pydantic
 from pydantic import ConfigDict, Field, model_validator
@@ -53,6 +53,8 @@ class JobSpec(pydantic.BaseModel):
     max_seq_len: int = Field(default=2048, ge=1)
     seed: int = 0
     beta: float | None = Field(default=None, allow_inf_nan=False)
+    #: DPO only: weight of the NLL-on-chosen term (TRL ``rpo_alpha``) that anchors the policy.
+    rpo_alpha: float | None = Field(default=None, allow_inf_nan=False)
     init_adapter: str | None = None
     gpu: str = Field(default="H100", min_length=1)
     timeout_s: int = Field(default=14400, ge=60)
@@ -68,11 +70,15 @@ class JobSpec(pydantic.BaseModel):
                 raise ValueError("dpo jobs require beta > 0")
             if not self.init_adapter or not self.init_adapter.strip():
                 raise ValueError("dpo jobs require a non-empty init_adapter (the SFT adapter)")
+            if self.rpo_alpha is not None and self.rpo_alpha < 0:
+                raise ValueError("rpo_alpha must be >= 0")
         else:
             if self.beta is not None:
                 raise ValueError("sft jobs must not set beta")
             if self.init_adapter is not None:
                 raise ValueError("sft jobs must not set init_adapter")
+            if self.rpo_alpha is not None:
+                raise ValueError("sft jobs must not set rpo_alpha")
         return self
 
     @property
@@ -111,6 +117,12 @@ def sft_spec(
     )
 
 
+#: HAC-28: the first DPO run used the SFT LoRA rate (2e-4); chosen log-probs fell to about -60 and
+#: the adapter emitted only special tokens. DPO wants a rate one to two orders lower, plus an SFT anchor.
+DPO_LEARNING_RATE = 1e-5
+DPO_RPO_ALPHA = 1.0
+
+
 def dpo_spec(
     base_model: str,
     dataset: str | os.PathLike,
@@ -118,6 +130,8 @@ def dpo_spec(
     *,
     volume_path: str | None = None,
     beta: float = 0.1,
+    learning_rate: float = DPO_LEARNING_RATE,
+    rpo_alpha: float | None = DPO_RPO_ALPHA,
     **overrides,
 ) -> JobSpec:
     path, digest = _hash_dataset(dataset)
@@ -128,8 +142,24 @@ def dpo_spec(
         dataset_sha256=digest,
         init_adapter=init_adapter,
         beta=beta,
+        learning_rate=learning_rate,
+        rpo_alpha=rpo_alpha,
         **overrides,
     )
+
+
+class TemplateDataError(ValueError):
+    """The datasets were realized by the offline ``TemplateClient``, not a language model."""
+
+
+def check_trainable(summary: Mapping[str, Any]) -> None:
+    """Refuse datasets whose ``summary.json`` is offline/template (HAC-28: SFT collapsed to the pool)."""
+    model_id = str(summary.get("model_id") or "")
+    if summary.get("offline") is not False or not model_id or model_id.startswith("template"):
+        raise TemplateDataError(
+            f"datasets come from {model_id or 'an unknown client'} (offline={summary.get('offline')!r}); "
+            "realize narratives with Muse (python -m daypart.train.run without --offline) before training"
+        )
 
 
 JobStatus = Literal["pending", "running", "succeeded", "failed"]
@@ -260,6 +290,8 @@ def plan_pipeline(
 
 
 __all__ = [
+    "DPO_LEARNING_RATE",
+    "DPO_RPO_ALPHA",
     "JobResult",
     "JobRunner",
     "JobSpec",
@@ -268,6 +300,8 @@ __all__ = [
     "LoraConfig",
     "ModalBackend",
     "PollResult",
+    "TemplateDataError",
+    "check_trainable",
     "dpo_spec",
     "language_lora_targets",
     "plan_pipeline",
