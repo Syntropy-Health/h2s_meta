@@ -13,7 +13,8 @@ import yaml
 from pydantic import ConfigDict, model_validator
 
 SCHEMA = "daypart-metrics/v1"
-ARM_KINDS: frozenset[str] = frozenset({"r2_dsl", "env_baseline", "i1_gate", "not_run"})
+ARM_KINDS: frozenset[str] = frozenset({"r2_dsl", "env_baseline", "i1_gate", "boundary_eval", "not_run"})
+EVAL_MODELS: tuple[str, ...] = ("base", "sft", "dpo")  # same as daypart.eval.boundary.EVAL_MODELS
 POLICIES: tuple[str, ...] = ("always_none", "always_barrier_problem_solving", "random_intent")
 TRAINING_ARMS: tuple[str, ...] = ("sft", "dpo", "grpo", "rm", "jev")
 ARM_STATUSES: tuple[str, ...] = ("ok", "not_run", "failed")
@@ -36,6 +37,8 @@ class ArmConfig(pydantic.BaseModel):
     n_scenarios: int | None = None
     seeds: tuple[int, ...] = ()
     horizon: int = 14
+    model: str | None = None
+    results: str | None = None
 
     @model_validator(mode="after")
     def _check(self) -> ArmConfig:
@@ -49,6 +52,11 @@ class ArmConfig(pydantic.BaseModel):
             raise ValueError(f"arm {self.name!r}: kind not_run requires a non-empty reason")
         if self.kind == "r2_dsl" and _blank(self.corpus):
             raise ValueError(f"arm {self.name!r}: kind r2_dsl requires a corpus path")
+        if self.kind == "boundary_eval":
+            if self.model not in EVAL_MODELS:
+                raise ValueError(f"arm {self.name!r}: kind boundary_eval requires model in {EVAL_MODELS}")
+            if _blank(self.results):
+                raise ValueError(f"arm {self.name!r}: kind boundary_eval requires a results directory")
         if self.kind == "env_baseline":
             if self.policy is None:
                 raise ValueError(f"arm {self.name!r}: kind env_baseline requires a policy")
@@ -129,6 +137,7 @@ def _coerce_row(row: Any) -> CorpusRow:
 __all__ = [
     "ARM_KINDS",
     "ARM_STATUSES",
+    "EVAL_MODELS",
     "POLICIES",
     "SCHEMA",
     "TRAINING_ARMS",

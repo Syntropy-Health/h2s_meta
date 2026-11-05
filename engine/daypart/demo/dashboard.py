@@ -13,7 +13,18 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from daypart.demo.dashboard_data import MetricsFileError, default_metrics_path, env_rows, load_metrics
+from daypart.demo.dashboard_data import (
+    MetricsFileError,
+    boundary_rows,
+    default_metrics_path,
+    env_rows,
+    load_boundary,
+    load_metrics,
+    load_training,
+    loss_rows,
+    results_dir,
+    training_rows,
+)
 
 SERIES = "#2a78d6"  # single-series bars: one hue, no legend
 STATUS_LABEL = {"ok": "ok", "not_run": "not run", "failed": "FAILED"}
@@ -94,11 +105,76 @@ def main() -> None:
             st.dataframe(pd.DataFrame([{"builder": b, "result": r} for b, r in sorted(m.get("builders", {}).items())]),
                          hide_index=True, use_container_width=True)
 
+    _training_panel(results_dir(path))
+
     with st.expander("Per-seed detail"):
         for a in doc.arms:
             if a.kind == "env_baseline" and a.status == "ok":
                 st.markdown(f"**{a.name}**")
                 st.dataframe(pd.DataFrame(a.metrics["per_seed"]), hide_index=True, use_container_width=True)
+
+
+def _training_panel(directory) -> None:
+    """Muse Glimmer 30B QLoRA run (training.json) + the base/SFT/DPO boundary eval (boundary_eval.json)."""
+    st.subheader("Training · Muse Glimmer 30B, 4-bit QLoRA on Modal")
+    try:  # each file renders on its own: a bad training.json does not hide the boundary table
+        record = load_training(directory)
+        stages = pd.DataFrame(training_rows(record)) if record is not None else None
+        losses = pd.DataFrame(loss_rows(record)) if record is not None else None
+    except (MetricsFileError, KeyError, TypeError, ValueError) as exc:
+        st.error(f"training.json: {exc}")
+        record = None
+        stages = losses = pd.DataFrame()
+    if record is None and stages is None:
+        st.info("No training.json committed yet.")
+    elif stages is not None and not stages.empty:
+        k = st.columns(len(stages) * 2)
+        for i, row in enumerate(stages.itertuples()):
+            k[2 * i].metric(f"{row.stage.upper()} steps", f"{row.steps:,}", help=f"{row.rows:,} rows")
+            k[2 * i + 1].metric(f"{row.stage.upper()} time · peak GPU", f"{row.train_minutes} min · {row.peak_gpu_gb} GB")
+        st.dataframe(stages, hide_index=True, use_container_width=True)
+        if not losses.empty:
+            st.caption("Training loss by step (logged every 10 steps; the run record keeps the last entries)")
+            chart = (
+                alt.Chart(losses)
+                .mark_line(color=SERIES, point=True)
+                .encode(
+                    x=alt.X("step:Q", title="step"),
+                    y=alt.Y("loss:Q", title="loss", scale=alt.Scale(zero=False)),
+                    tooltip=["stage", "step", "loss"],
+                )
+                .properties(height=200)
+                .facet(column=alt.Column("stage:N", title=None))
+                .resolve_scale(x="independent", y="independent")
+            )
+            st.altair_chart(chart)
+    elif record is not None:
+        st.info("training.json has no sft or dpo stage.")
+
+    st.subheader("Boundary eval · base vs SFT vs DPO (held-out prompts)")
+    try:
+        report = load_boundary(directory)
+        table = pd.DataFrame(boundary_rows(report)) if report is not None else None
+    except (MetricsFileError, KeyError, TypeError, ValueError) as exc:
+        st.error(f"boundary_eval.json: {exc}")
+        return
+    if report is None:
+        st.info("No boundary_eval.json committed yet: the base, sft and dpo arms report not run.")
+        return
+    st.dataframe(table, hide_index=True, use_container_width=True)
+    v = st.columns(2)
+    for col, key, label in ((v[0], "r3", "R3 · SFT over base by the pre-registered margin"),
+                            (v[1], "r4", "R4 · DPO ≥ SFT on rubric, no boundary regression")):
+        verdict = report.get(key)
+        if verdict is None:
+            col.metric(label, "not run")
+        else:
+            col.metric(label, "pass" if verdict["passed"] else "FAIL")
+            col.json(verdict, expanded=False)
+    st.caption(
+        f"prompts `{report.get('prompt_set_version')}` · rules `{report.get('rule_version')}` · "
+        f"rubric `{report.get('rubric_version')}` · margin {report.get('margin')}"
+    )
 
 
 main()

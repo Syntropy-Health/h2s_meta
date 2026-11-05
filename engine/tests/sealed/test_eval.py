@@ -1,7 +1,8 @@
 """Sealed challenge suite — slice E1 eval harness (``daypart.eval``).
 
 Written double-blind from docs/daypart/contracts/CONTRACT-slice-E-eval-passport.md
-(sections E1.1-E1.3, E3). Only upstream public modules (slices A-D, syntropy.lhm,
+(sections E1.1-E1.3, E3), updated for docs/daypart/contracts/CONTRACT-slice-G-bench.md G3
+(``boundary_eval`` arm kind; default ``base``/``sft``/``dpo`` arms; HAC-27). Only upstream public modules (slices A-D, syntropy.lhm,
 aviary) are used to build reference values.
 
 Categories:
@@ -56,12 +57,16 @@ DEFAULT_ARMS = (
     ("env_always_barrier_problem_solving", "env_baseline"),
     ("env_random_intent", "env_baseline"),
     ("i1_gate", "i1_gate"),
-    ("sft", "not_run"),
-    ("dpo", "not_run"),
+    ("base", "boundary_eval"),
+    ("sft", "boundary_eval"),
+    ("dpo", "boundary_eval"),
     ("grpo", "not_run"),
     ("rm", "not_run"),
     ("jev", "not_run"),
 )
+# G3: the default boundary_eval arms read <results>/boundary_eval.json (+ training.json for sft/dpo).
+BOUNDARY_RESULTS = "../docs/daypart/results"
+BOUNDARY_EVAL_JSON = ENGINE.parent / "docs" / "daypart" / "results" / "boundary_eval.json"
 ARM_RESULT_KEYS = {"name", "kind", "status", "reason", "metrics"}
 TOP_KEYS = {
     "schema",
@@ -262,7 +267,8 @@ class TestConstants:
     def test_module_constants(self):
         ev = _ev()
         assert ev.SCHEMA == "daypart-metrics/v1"
-        assert ev.ARM_KINDS == frozenset({"r2_dsl", "env_baseline", "i1_gate", "not_run"})
+        # G3: ARM_KINDS gains "boundary_eval".
+        assert ev.ARM_KINDS == frozenset({"r2_dsl", "env_baseline", "i1_gate", "not_run", "boundary_eval"})
         assert isinstance(ev.ARM_KINDS, frozenset)
         assert tuple(ev.POLICIES) == ("always_none", "always_barrier_problem_solving", "random_intent")
         assert tuple(ev.TRAINING_ARMS) == ("sft", "dpo", "grpo", "rm", "jev")
@@ -449,12 +455,25 @@ class TestDefaultRunsYaml:
             assert a.horizon == 14
 
     def test_not_run_arms(self):
+        # G3: grpo, rm, jev stay not_run; no arm reason mentions Fireworks.
         ev = _ev()
         cfg = ev.load_runs()
         nr = [a for a in cfg.arms if a.kind == "not_run"]
-        assert tuple(a.name for a in nr) == tuple(ev.TRAINING_ARMS)
+        assert tuple(a.name for a in nr) == ("grpo", "rm", "jev")
+        assert set(a.name for a in nr) <= set(ev.TRAINING_ARMS)
         for a in nr:
             assert isinstance(a.reason, str) and a.reason.strip()
+        for a in cfg.arms:
+            assert "fireworks" not in (a.reason or "").lower()
+
+    def test_boundary_eval_arms(self):
+        # G3: base, sft, dpo of kind boundary_eval with results ../docs/daypart/results.
+        cfg = _ev().load_runs()
+        be = [a for a in cfg.arms if a.kind == "boundary_eval"]
+        assert tuple(a.name for a in be) == ("base", "sft", "dpo")
+        assert tuple(a.model for a in be) == ("base", "sft", "dpo")
+        for a in be:
+            assert a.results == BOUNDARY_RESULTS
 
     def test_package_data_declared(self):
         text = (ENGINE / "pyproject.toml").read_text(encoding="utf-8")
@@ -1203,7 +1222,10 @@ class TestCli:
 def default_run(tmp_path_factory):
     ev = _ev()
     out = tmp_path_factory.mktemp("eval_default") / "nested" / "metrics.json"
-    rc = ev.main(["--out", str(out), "--root", str(ENGINE)])
+    with pytest.MonkeyPatch.context() as mp:
+        # G3: DAYPART_RESULTS_DIR would redirect the boundary_eval arms away from the committed results.
+        mp.delenv("DAYPART_RESULTS_DIR", raising=False)
+        rc = ev.main(["--out", str(out), "--root", str(ENGINE)])
     return rc, out.read_text(encoding="utf-8")
 
 
@@ -1218,8 +1240,18 @@ class TestDefaultConfig:
         data = json.loads(text)
         assert data["runs_version"] == "eval-v1"
         assert tuple((a["name"], a["kind"]) for a in data["arms"]) == DEFAULT_ARMS
-        assert [a["status"] for a in data["arms"]] == ["ok"] * 5 + ["not_run"] * 5
-        assert data["summary"] == {"ok": 5, "not_run": 5, "failed": 0}
+        # G3: the boundary_eval arms are ok once boundary_eval.json is committed next to training.json,
+        # else not_run with a reason naming the missing file (no absolute path).
+        be = data["arms"][5:8]
+        if BOUNDARY_EVAL_JSON.is_file():
+            be_status = ["ok"] * 3
+        else:
+            be_status = ["not_run"] * 3
+            for a in be:
+                assert "boundary_eval.json" in a["reason"]
+        assert [a["status"] for a in data["arms"]] == ["ok"] * 5 + be_status + ["not_run"] * 3
+        n_ok = 5 + be_status.count("ok")
+        assert data["summary"] == {"ok": n_ok, "not_run": 11 - n_ok, "failed": 0}
 
     def test_r2_arm_meets_acceptance(self, default_run):
         _, text = default_run
