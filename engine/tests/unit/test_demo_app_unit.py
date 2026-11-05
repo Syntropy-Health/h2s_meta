@@ -138,3 +138,13 @@ def test_passport_withheld_early_and_ready_later(client):
 def test_passport_day_bounds(client):
     assert client.get("/api/members/syn-001/passport", params={"day": -1}).status_code == 422
     assert client.get("/api/members/syn-001/passport", params={"day": 10_000}).status_code == 422
+
+
+def test_results_redirects_to_hosted_dashboard_when_configured():
+    with TestClient(create_app(cohort_seed=0, results_url="https://example.test/dash")) as c:
+        r = c.get("/results", follow_redirects=False)
+    assert r.status_code == 307 and r.headers["location"] == "https://example.test/dash"
+
+
+def test_results_404_without_hosted_dashboard(client):
+    assert client.get("/results", follow_redirects=False).status_code == 404

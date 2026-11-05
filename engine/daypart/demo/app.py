@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from importlib.resources import files
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from daypart.demo.playground import (
@@ -34,8 +35,10 @@ class StepIn(BaseModel):
     text: str | None = Field(None, max_length=2000)  # None -> the intent's boundary-safe default
 
 
-def create_app(cohort_seed: int = 0) -> FastAPI:
+def create_app(cohort_seed: int = 0, results_url: str | None = None) -> FastAPI:
+    """``results_url`` (or env ``DAYPART_RESULTS_URL``): where ``/results`` redirects (the hosted dashboard)."""
     pg = Playground(cohort_seed)
+    results_url = results_url or os.environ.get("DAYPART_RESULTS_URL") or None
     app = FastAPI(
         title="Daypart playground",
         description="Synthetic SimMembers only. Not a consumer UI. Not medical advice.",
@@ -50,6 +53,12 @@ def create_app(cohort_seed: int = 0) -> FastAPI:
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def index() -> str:
         return index_html
+
+    @app.get("/results", include_in_schema=False)
+    def results() -> RedirectResponse:
+        if not results_url:
+            raise HTTPException(status_code=404, detail="no hosted dashboard; run `daypart-demo dashboard`")
+        return RedirectResponse(results_url, status_code=307)
 
     @app.get("/api/health")
     def health() -> dict:
