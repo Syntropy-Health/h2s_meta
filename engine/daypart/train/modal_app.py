@@ -14,6 +14,14 @@ Base model: ``meta-models/Muse-Glimmer-30B`` (``MuseGlimmerForConditionalGenerat
 H100: LoRA sits on the language tower only (:func:`language_lora_targets`); the
 vision tower, adapter and projection stay frozen in bf16 and never run.
 
+Everything at once, server-side (HAC-28): Muse data in member shards, SFT, DPO, 2.4 eval. Needs the
+``daypart-muse`` Modal secret (``MUSE_API_KEY``). ``pipeline`` prints a call id and returns; a later run
+fetches the results with ``collect``::
+
+    uv run --with modal modal deploy daypart/train/modal_app.py
+    uv run --with modal modal run daypart/train/modal_app.py::pipeline
+    uv run --with modal modal run daypart/train/modal_app.py::collect --call-id fc-...
+
 Training (SFT then DPO), from ``engine/``, on Muse-realized data only (``train`` refuses
 offline/template datasets; HAC-28)::
 
@@ -467,45 +475,24 @@ def _volume_jsonl(path: str) -> list[dict]:
     return [json.loads(line) for line in data.decode("utf-8").splitlines() if line.strip()]
 
 
-@app.local_entrypoint()
-def boundary_eval(
-    out: str = "boundary_eval.json",
-    max_prompts: int = 300,
-    max_new_tokens: int = 512,
-    batch_size: int = 16,
-    seed: int = 0,
-    sft_adapter: str = "",
-    dpo_adapter: str = "",
-    base_model: str = BASE_MODEL,
-    dry_run: bool = False,
-) -> None:
-    """2.4: held-out prompts (I1-gated), greedy base/SFT/DPO generation on one H100, R3/R4 report."""
-    import io
-
-    from daypart.eval.boundary import build_report, cost_estimate, heldout_prompts, score_response, training_user_turns
+def _heldout(training: list[dict], max_prompts: int) -> tuple[list[dict], int, int]:
+    """Held-out prompts (I1 cohort, training user turns excluded) -> ``(prompts, n_excluded, cohort_seed)``."""
+    from daypart.eval import load_runs
+    from daypart.eval.boundary import heldout_prompts, training_user_turns
     from daypart.simmember.cohort import generate
 
-    training = _volume_jsonl("datasets/sft.jsonl") + _volume_jsonl("datasets/dpo.jsonl")
     exclude = training_user_turns(training)
-    from daypart.eval import load_runs
-
     cohort_seed = load_runs().cohort_seed  # the cohort the harness and I1 use
     prompts = heldout_prompts(generate(cohort_seed), max_prompts=max_prompts, exclude_user_turns=exclude)
-    est = cost_estimate(len(prompts), batch_size=batch_size, max_new_tokens=max_new_tokens, usd_per_s=H100_USD_PER_S)
-    print(
-        f"boundary_eval: {len(prompts)} held-out prompts x 3 models ({len(exclude)} training user turns excluded);"
-        f" expected ~{est['seconds'] / 60:.0f} min on one H100 ~ ${est['usd']:.2f}"
-        f" (H100 at ${H100_USD_PER_S * 3600:.2f}/h, {est['batches']} batches of {batch_size} x {max_new_tokens} tokens)"
-    )
-    if dry_run:
-        return
-    adapters = {"sft": sft_adapter, "dpo": dpo_adapter}
-    if not all(adapters.values()):
-        adapters = {**_trained_adapters(), **{m: a for m, a in adapters.items() if a}}
-    print(f"adapters: {adapters}")
-    gen = boundary_generate.remote(
-        json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed
-    )
+    return prompts, len(exclude), cohort_seed
+
+
+def _boundary_report(
+    prompts: list[dict], gen: dict, *, adapters: dict, base_model: str, seed: int, cohort_seed: int,
+    max_new_tokens: int, n_excluded: int, est: dict,
+) -> dict:
+    from daypart.eval.boundary import build_report, score_response
+
     scored = {
         m: [
             {**score_response(p, t), "raw": r}
@@ -522,18 +509,16 @@ def boundary_eval(
         "reply": "to=user channel of the chat template (special tokens kept, chat_format.extract_reply)",
         "max_new_tokens": max_new_tokens,
         "n_prompts": len(prompts),
-        "n_excluded_training_turns": len(exclude),
+        "n_excluded_training_turns": n_excluded,
         "load_s": gen["load_s"],
         "gen_s": gen["gen_s"],
         "peak_gpu_gb": gen["peak_gpu_gb"],
         "estimate": est,
     }
-    report = build_report(scored, meta=meta)
-    text = json.dumps(report, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
-    with volume.batch_upload(force=True) as batch:
-        batch.put_file(io.BytesIO(text.encode("utf-8")), "/results/boundary_eval.json")
-    Path(out).parent.mkdir(parents=True, exist_ok=True)
-    Path(out).write_text(text, encoding="utf-8")
+    return build_report(scored, meta=meta)
+
+
+def _print_report(report: dict) -> None:
     for m in ("base", "sft", "dpo"):
         agg = report["models"][m]
         print(
@@ -542,14 +527,205 @@ def boundary_eval(
         )
     print("R3:", json.dumps(report["r3"]))
     print("R4:", json.dumps(report["r4"]))
-    print(f"wrote {out} and {VOLUME_NAME}:/results/boundary_eval.json")
-    # The committed metrics.json must move with boundary_eval.json (QG F2; unit test guards it).
+
+
+def write_metrics(out: str | Path) -> None:
+    """Regenerate the committed ``metrics.json`` next to ``out`` (it must move with boundary_eval.json; QG F2)."""
     from daypart.eval import dumps, load_runs, run
 
     results = Path(out).resolve().parent
     os.environ["DAYPART_RESULTS_DIR"] = str(results)
     (results / "metrics.json").write_text(dumps(run(load_runs(), root=Path(__file__).resolve().parents[2])), encoding="utf-8")
     print(f"regenerated {results.name}/metrics.json; commit it with {Path(out).name} and training.json")
+
+
+@app.local_entrypoint()
+def boundary_eval(
+    out: str = "boundary_eval.json",
+    max_prompts: int = 300,
+    max_new_tokens: int = 512,
+    batch_size: int = 16,
+    seed: int = 0,
+    sft_adapter: str = "",
+    dpo_adapter: str = "",
+    base_model: str = BASE_MODEL,
+    dry_run: bool = False,
+) -> None:
+    """2.4: held-out prompts (I1-gated), greedy base/SFT/DPO generation on one H100, R3/R4 report."""
+    import io
+
+    from daypart.eval.boundary import cost_estimate
+
+    training = _volume_jsonl("datasets/sft.jsonl") + _volume_jsonl("datasets/dpo.jsonl")
+    prompts, n_excluded, cohort_seed = _heldout(training, max_prompts)
+    est = cost_estimate(len(prompts), batch_size=batch_size, max_new_tokens=max_new_tokens, usd_per_s=H100_USD_PER_S)
+    print(
+        f"boundary_eval: {len(prompts)} held-out prompts x 3 models ({n_excluded} training user turns excluded);"
+        f" expected ~{est['seconds'] / 60:.0f} min on one H100 ~ ${est['usd']:.2f}"
+        f" (H100 at ${H100_USD_PER_S * 3600:.2f}/h, {est['batches']} batches of {batch_size} x {max_new_tokens} tokens)"
+    )
+    if dry_run:
+        return
+    adapters = {"sft": sft_adapter, "dpo": dpo_adapter}
+    if not all(adapters.values()):
+        adapters = {**_trained_adapters(), **{m: a for m, a in adapters.items() if a}}
+    print(f"adapters: {adapters}")
+    gen = boundary_generate.remote(
+        json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed
+    )
+    report = _boundary_report(
+        prompts, gen, adapters=adapters, base_model=base_model, seed=seed, cohort_seed=cohort_seed,
+        max_new_tokens=max_new_tokens, n_excluded=n_excluded, est=est,
+    )
+    text = json.dumps(report, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
+    with volume.batch_upload(force=True) as batch:
+        batch.put_file(io.BytesIO(text.encode("utf-8")), "/results/boundary_eval.json")
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    Path(out).write_text(text, encoding="utf-8")
+    _print_report(report)
+    print(f"wrote {out} and {VOLUME_NAME}:/results/boundary_eval.json")
+    write_metrics(out)
+
+
+# --------------------------------------------------------------------------- #
+# HAC-28: the whole run server-side (Muse data -> SFT -> DPO -> 2.4 eval), one spawned call
+# --------------------------------------------------------------------------- #
+
+#: Modal secret holding ``MUSE_API_KEY`` (``modal secret create daypart-muse --from-dotenv ...``).
+MUSE_SECRET = "daypart-muse"
+DATA_ROOT = "data"
+PIPELINE_RECORD = "results/pipeline.json"
+
+data_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("numpy>=2,<3", "pydantic>=2.7,<3", "pyyaml>=6,<7", "fhir.resources==8.3.0")
+    .add_local_python_source("daypart", "syntropy", ignore=["**/__pycache__/**", "**/tests/**"])
+)
+
+
+def _commit_json(rel: str, record: dict) -> None:
+    volume.reload()
+    path = Path(_vol_path(rel))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    volume.commit()
+
+
+def _run_args(out: Path, *extra: str, seed: int, reasoning_effort: str):
+    from daypart.train import run as R
+
+    return R.parse_args(["--out", str(out), "--seed", str(seed), "--reasoning-effort", reasoning_effort, *extra])
+
+
+@app.function(
+    image=data_image, volumes={VOL: volume}, secrets=[modal.Secret.from_name(MUSE_SECRET)],
+    cpu=1, memory=2048, timeout=4 * 3600, max_containers=32,
+)
+def realize_shard(tag: str, offset: int, count: int, seed: int = 0, reasoning_effort: str = "minimal",
+                  max_usd: float = 2.0, max_calls: int = 1000) -> dict:
+    """Muse realization for training members ``[offset, offset+count)``; records every call to a replay file."""
+    from daypart.train import run as R
+
+    out = Path(VOL) / DATA_ROOT / tag / f"shard-{offset:03d}"
+    summary = R.run(_run_args(
+        out, "--member-offset", str(offset), "--members", str(count), "--replay", str(out / "replay.jsonl"),
+        "--max-usd", str(max_usd), "--max-calls", str(max_calls), seed=seed, reasoning_effort=reasoning_effort,
+    ))
+    volume.commit()
+    return summary
+
+
+@app.function(
+    image=data_image, volumes={VOL: volume}, secrets=[modal.Secret.from_name(MUSE_SECRET)],
+    cpu=1, memory=4096, timeout=24 * 3600,
+)
+def full_pipeline(
+    tag: str, shards: int = 25, seed: int = 0, reasoning_effort: str = "minimal", max_usd: float = 40.0,
+    base_model: str = BASE_MODEL, max_prompts: int = 300, max_new_tokens: int = 512, batch_size: int = 16,
+) -> dict:
+    """Shards -> merged replay -> global data build -> ``check_trainable`` -> SFT -> DPO -> boundary eval.
+
+    Writes ``/vol/results/pipeline.json`` after each stage and ``/vol/results/boundary_eval.json`` at the end.
+    Spawn it on the deployed app (``pipeline`` entrypoint) and poll the call id; no local process needed.
+    """
+    import shutil
+
+    from daypart.eval.boundary import cost_estimate
+    from daypart.simmember.cohort import generate
+    from daypart.train import run as R
+    from daypart.train.modal_jobs import check_trainable, dpo_spec, sft_spec
+
+    _heldout([], 1)  # preflight: the eval imports/config work in this image before any spend
+    record: dict = {"tag": tag, "stage": "data", "started": time.time()}
+    _commit_json(PIPELINE_RECORD, record)
+    n = len(generate(seed).training_profiles())
+    size = -(-n // shards)
+    windows = [(tag, off, size, seed, reasoning_effort, max_usd / shards, 12000 // shards) for off in range(0, n, size)]
+    shard_summaries = list(realize_shard.starmap(windows, return_exceptions=True))
+    volume.reload()
+    root = Path(VOL) / DATA_ROOT / tag
+    full = root / "full"
+    merged = R.merge_replays([root / f"shard-{w[1]:03d}" / "replay.jsonl" for w in windows], full / "replay.jsonl")
+    summary = R.run(_run_args(full, "--replay", str(full / "replay.jsonl"), "--max-usd", "5", seed=seed,
+                              reasoning_effort=reasoning_effort))
+    shard_errors = [repr(s) for s in shard_summaries if isinstance(s, BaseException)]
+    record.update(stage="train", replay_entries=merged, data=summary, shard_errors=shard_errors[:10],
+                  shard_est_usd=round(sum(s["est_usd"] for s in shard_summaries if isinstance(s, dict)), 4),
+                  shard_member_failures=sum(s["member_failure_count"] for s in shard_summaries if isinstance(s, dict)))
+    _commit_json(PIPELINE_RECORD, record)
+    check_trainable(summary)
+    datasets = Path(VOL) / "datasets"
+    datasets.mkdir(parents=True, exist_ok=True)
+    for name in ("sft.jsonl", "dpo.jsonl", "summary.json"):
+        shutil.copyfile(full / name, datasets / name)
+    volume.commit()
+    sft = sft_spec(base_model, datasets / "sft.jsonl")
+    dpo = dpo_spec(base_model, datasets / "dpo.jsonl", f"adapters/{sft.name}")
+    if summary["sft_rows"] < MIN_TRAIN_ROWS or summary["dpo_pairs"] < MIN_TRAIN_ROWS:
+        raise RuntimeError(f"need >= {MIN_TRAIN_ROWS} SFT rows and DPO pairs, got {summary['sft_rows']}/{summary['dpo_pairs']}")
+    record["training"] = train_pipeline.remote(sft.model_dump_json(), dpo.model_dump_json())
+    record["stage"] = "eval"
+    _commit_json(PIPELINE_RECORD, record)
+
+    training = [json.loads(x) for p in ("sft.jsonl", "dpo.jsonl") for x in (datasets / p).read_text().splitlines() if x.strip()]
+    prompts, n_excluded, cohort_seed = _heldout(training, max_prompts)
+    est = cost_estimate(len(prompts), batch_size=batch_size, max_new_tokens=max_new_tokens, usd_per_s=H100_USD_PER_S)
+    adapters = {m: str(PurePosixPath(record["training"][m]["adapter"]).relative_to(VOL)) for m in ("sft", "dpo")}
+    gen = boundary_generate.remote(json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed)
+    report = _boundary_report(
+        prompts, gen, adapters=adapters, base_model=base_model, seed=seed, cohort_seed=cohort_seed,
+        max_new_tokens=max_new_tokens, n_excluded=n_excluded, est=est,
+    )
+    _commit_json("results/boundary_eval.json", report)
+    _print_report(report)
+    record.update(stage="done", finished=time.time(), r3=report["r3"], r4=report["r4"],
+                  models={m: {k: report["models"][m][k] for k in ("boundary_pass_rate", "rubric_pass_rate", "n",
+                                                                  "degenerate", "distinct_responses")}
+                          for m in ("base", "sft", "dpo")})
+    _commit_json(PIPELINE_RECORD, record)
+    return record
+
+
+@app.local_entrypoint()
+def pipeline(tag: str = "", shards: int = 25, max_usd: float = 40.0, reasoning_effort: str = "minimal") -> None:
+    """Spawn :func:`full_pipeline` on the DEPLOYED app and print the call id (returns at once)."""
+    tag = tag or time.strftime("hac28-%Y%m%dT%H%M%SZ", time.gmtime())
+    fn = modal.Function.from_name(APP_NAME, "full_pipeline")
+    call = fn.spawn(tag, shards=shards, max_usd=max_usd, reasoning_effort=reasoning_effort)
+    print(f"spawned full_pipeline tag={tag}: {call.object_id}")
+
+
+@app.local_entrypoint()
+def collect(call_id: str, out: str = "../docs/daypart/results/boundary_eval.json") -> None:
+    """Next run: fetch a finished :func:`full_pipeline` (``boundary_eval.json``, ``training.json``), regenerate metrics."""
+    rec = modal.FunctionCall.from_id(call_id).get(timeout=0)
+    results = Path(out).resolve().parent
+    for rel, dest in (("results/boundary_eval.json", Path(out)), (TRAINING_RECORD, results / "training.json"),
+                      (PIPELINE_RECORD, results / "pipeline.json")):
+        dest.write_bytes(b"".join(volume.read_file(rel)))
+        print(f"wrote {dest}")
+    print(json.dumps({k: rec[k] for k in ("r3", "r4", "models")}, indent=1))
+    write_metrics(out)
 
 
 class ModalSdkBackend:
