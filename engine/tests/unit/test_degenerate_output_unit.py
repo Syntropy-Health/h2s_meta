@@ -24,6 +24,18 @@ from daypart.train.modal_jobs import (
     sft_spec,
 )
 
+
+@pytest.fixture(autouse=True)
+def _fresh_names():
+    # A sealed test reloads modal_jobs; re-bind so isinstance/raises see the live classes.
+    import importlib
+    mod = importlib.import_module("daypart.train.modal_jobs")
+    g = globals()
+    for n in ("JobSpec", "TemplateDataError", "check_trainable", "dpo_loss_kwargs", "dpo_spec", "sft_spec"):
+        g[n] = getattr(mod, n)
+    yield
+
+
 SAFE = "Missed days happen. What is one small step you could take tonight?"
 
 
