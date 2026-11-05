@@ -75,7 +75,7 @@ def test_step_default_text_passes_membrane_and_rewards(client):
     assert s["intent"] == "barrier_problem_solving"
     assert s["membrane"]["decision"] == "pass"
     assert s["membrane"]["layer0"]["outcome"] == "pass"
-    assert s["membrane"]["dsl"]["violations"] == []
+    assert s["membrane"]["dsl"]["violations"] == [] and s["dsl_hits"] == []
     assert s["reward"] in (0.0, 1.0)
     assert s["state"]["day"] == 1 and not s["done"]
 
@@ -84,7 +84,8 @@ def test_step_violation_is_withheld_and_ends_episode(client):
     ep = _episode(client)
     s = client.post(f"/api/episodes/{ep['episode_id']}/step", json={"intent": "reminder", "text": UNSAFE}).json()
     assert s["membrane"]["decision"] == "escalate"
-    assert s["membrane"]["dsl"]["violations"]  # DSL rule hits shown
+    assert s["membrane"]["layer0"]["outcome"] == "fail"
+    assert "dosing.unit_quantity" in s["dsl_hits"]  # DSL rule hits shown even when layer 0 stops post()
     assert s["draft"] == WITHHELD_DRAFT  # the unsafe text never echoes back
     assert UNSAFE not in str(s)
     assert s["reward"] == -1.0 and s["done"] is True

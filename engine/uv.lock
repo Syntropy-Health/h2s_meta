@@ -401,6 +401,7 @@ wheels = [
 name = "daypart-engine"
 version = "0.1.0"
 source = { editable = "." }
+default-groups = ["demo", "dev"]
 dependencies = [
     { name = "fhaviary" },
     { name = "numpy" },
