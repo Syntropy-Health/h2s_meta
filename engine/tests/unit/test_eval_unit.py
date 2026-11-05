@@ -7,7 +7,6 @@ from daypart.ci import i1_check
 from daypart.eval import (
     POLICIES,
     POLICY_TEXT,
-    TRAINING_ARMS,
     ArmConfig,
     CorpusRow,
     RunsConfig,
