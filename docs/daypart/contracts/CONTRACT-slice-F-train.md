@@ -174,7 +174,7 @@ def sft_spec(base_model: str, dataset: str | os.PathLike, *, volume_path: str | 
 def dpo_spec(base_model: str, dataset: str | os.PathLike, init_adapter: str, *, volume_path: str | None = None, beta: float = 0.1, learning_rate: float = DPO_LEARNING_RATE, rpo_alpha: float | None = DPO_RPO_ALPHA, **overrides) -> JobSpec
 
 DPO_LEARNING_RATE = 1e-5    # HAC-28: 2e-4 (the SFT LoRA rate) collapsed the DPO policy to special tokens
-DPO_RPO_ALPHA = 1.0         # TRL rpo_alpha: NLL on chosen, anchors the policy
+DPO_RPO_ALPHA = 1.0         # RPO weight: NLL on chosen, anchors the policy
 
 class TemplateDataError(ValueError): ...
 def check_trainable(summary: Mapping[str, Any]) -> None
@@ -223,7 +223,7 @@ def plan_pipeline(base_model: str, sft_dataset: str | os.PathLike, dpo_dataset: 
 ```
 Returns the SFT spec and a function `adapter -> dpo JobSpec` (init_adapter = the SFT adapter). DPO is only built from a finished SFT adapter.
 
-`daypart/train/modal_app.py` (deploy-only; `modal deploy`): a `modal.App("daypart-train")` with GPU functions `sft_train(spec_json: str, resume_from: str | None) -> dict` and `dpo_train(...)` (TRL + PEFT in the image), a `modal.Volume` for datasets/checkpoints/adapters, writing checkpoints under `spec.checkpoint_dir` and returning `{"adapter": ...}`. `dpo_train` passes `beta` and `rpo_alpha` to `DPOConfig`. A `train(data_dir)` local entrypoint calls `check_trainable` on `data_dir/summary.json`, uploads, and spawns `train_pipeline` (SFT then DPO, writes `/vol/results/training.json`) on the deployed app. Plus `ModalSdkBackend` (in `modal_app.py` or a module that imports `modal` lazily inside methods) implementing `ModalBackend` over `modal.Function.from_name(...).spawn(...)` / `modal.FunctionCall.from_id(...)`. Not covered by sealed tests (needs credentials); must not be imported by `daypart.train.__init__`.
+`daypart/train/modal_app.py` (deploy-only; `modal deploy`): a `modal.App("daypart-train")` with GPU functions `sft_train(spec_json: str, resume_from: str | None) -> dict` and `dpo_train(...)` (TRL + PEFT in the image), a `modal.Volume` for datasets/checkpoints/adapters, writing checkpoints under `spec.checkpoint_dir` and returning `{"adapter": ...}`. `dpo_train` passes `beta` to `DPOConfig`, and a truthy `rpo_alpha` as `loss_type=["sigmoid", "sft"]`, `loss_weights=[1.0, rpo_alpha]` (TRL 1.17 has no `rpo_alpha` field). A `train(data_dir)` local entrypoint calls `check_trainable` on `data_dir/summary.json`, uploads, and spawns `train_pipeline` (SFT then DPO, writes `/vol/results/training.json`) on the deployed app. Plus `ModalSdkBackend` (in `modal_app.py` or a module that imports `modal` lazily inside methods) implementing `ModalBackend` over `modal.Function.from_name(...).spawn(...)` / `modal.FunctionCall.from_id(...)`. Not covered by sealed tests (needs credentials); must not be imported by `daypart.train.__init__`.
 
 ## F7. Out of scope here (run phase, needs secrets)
 

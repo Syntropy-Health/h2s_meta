@@ -53,7 +53,7 @@ class JobSpec(pydantic.BaseModel):
     max_seq_len: int = Field(default=2048, ge=1)
     seed: int = 0
     beta: float | None = Field(default=None, allow_inf_nan=False)
-    #: DPO only: weight of the NLL-on-chosen term (TRL ``rpo_alpha``) that anchors the policy.
+    #: DPO only: weight of the NLL-on-chosen term (RPO) that anchors the policy; TRL 1.17: ``loss_type=["sigmoid", "sft"]``.
     rpo_alpha: float | None = Field(default=None, allow_inf_nan=False)
     init_adapter: str | None = None
     gpu: str = Field(default="H100", min_length=1)

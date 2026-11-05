@@ -228,6 +228,13 @@ def sft_train(
     return _finish(trainer, tokenizer, spec, max_steps is not None, timer, t0, t_loaded, t_trained)
 
 
+def _dpo_loss(spec: JobSpec) -> dict:
+    """``rpo_alpha`` as TRL 1.17 spells it: sigmoid DPO plus a weighted SFT (NLL on chosen) term."""
+    if not spec.rpo_alpha:
+        return {"loss_type": ["sigmoid"]}
+    return {"loss_type": ["sigmoid", "sft"], "loss_weights": [1.0, spec.rpo_alpha]}
+
+
 @app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
 def dpo_train(
     spec_json: str, resume_from: str | None = None, max_steps: int | None = None, max_rows: int | None = None
@@ -249,7 +256,7 @@ def dpo_train(
     trainer = DPOTrainer(
         model=model,
         ref_model=None,  # PEFT: TRL copies the SFT adapter into a frozen "ref" adapter
-        args=DPOConfig(beta=spec.beta, rpo_alpha=spec.rpo_alpha, **_common_args(spec, max_steps)),
+        args=DPOConfig(beta=spec.beta, **_dpo_loss(spec), **_common_args(spec, max_steps)),
         train_dataset=dataset,
         processing_class=tokenizer,
         callbacks=[timer],
