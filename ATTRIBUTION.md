@@ -6,7 +6,7 @@ This repository separates **pre-existing Syntropy Health code** from **new hacka
 
 | What | Where | Provenance |
 |---|---|---|
-| LHM — Longevity Health Metrics SDK (`syntropy.lhm`) | repo root: `syntropy/`, `tests/`, `docs/` (non-`daypart`), `pyproject.toml`, `uv.lock` | Byte-identical to [`Syntropy-Health/lhm@4821dc7`](https://github.com/Syntropy-Health/lhm/commit/4821dc74406de21a0e5274892be433f00d6f0ad0), committed here as `f170784 Initial commit` (2026-11-02). Apache-2.0. |
+| LHM — Longevity Health Metrics SDK (`syntropy.lhm`) | repo root: `syntropy/`, `tests/`, `docs/` (non-`daypart`), `pyproject.toml`, `uv.lock`, `LHM.md` (the SDK's README, moved from `README.md` unchanged) | Byte-identical to [`Syntropy-Health/lhm@4821dc7`](https://github.com/Syntropy-Health/lhm/commit/4821dc74406de21a0e5274892be433f00d6f0ad0), committed here as `f170784 Initial commit` (2026-11-02). Apache-2.0. |
 | AI-RDLC scaffold | `.claude/`, `agency.yaml`, `config/` | Tooling config, not product code. |
 
 The engine does **not** import the root copy. `engine/pyproject.toml` pins LHM from its upstream repo at the same commit (A&D D8), so the attribution line is also a dependency line.
@@ -17,7 +17,8 @@ Everything under:
 
 - `engine/` — the `daypart` package (simmember, membrane, train, rm, memory, evidence, personalize, passport, eval, demo) and its tests.
 - `docs/daypart/` — build contracts and technical docs.
-- `.github/workflows/engine.yml` — CI.
+- `.github/workflows/engine.yml` — CI, and CD of the hosted demo to Modal.
+- `README.md` — the Daypart Engine README (the LHM README is preserved as `LHM.md`).
 - `ATTRIBUTION.md` — this file.
 
 Verify the boundary: `git diff --stat f170784 -- syntropy tests pyproject.toml uv.lock` is empty.
@@ -29,10 +30,12 @@ Verify the boundary: `git diff --stat f170784 -- syntropy tests pyproject.toml u
 | `syntropy-lhm` @4821dc7 (`[lhm-scoring]`) | claim/narration gates, record shapes, scoring, readiness | Apache-2.0 (Syntropy Health, pre-existing) |
 | `fhaviary` (FutureHouse aviary) | RL environment framework (D16) | Apache-2.0 |
 | numpy, pydantic, PyYAML | core | BSD / MIT |
+| FastAPI, Streamlit, uvicorn | demo | MIT / Apache-2.0 / BSD |
+| transformers, TRL, PEFT, bitsandbytes, torch (Modal image only) | training | Apache-2.0 / MIT / BSD |
 
 ## Model use
 
-Muse Glimmer / Spark (Meta) via Fireworks — training arms SFT, DPO, GRPO and narrative realization. Status of each arm is reported in `engine/eval` results, including arms that did not run.
+Muse Glimmer 30B (Meta, Hugging Face weights) fine-tuned with SFT then DPO as 4-bit QLoRA on Modal; Muse Spark for narrative realization when credentials are present (offline template otherwise). Fireworks was dropped (plan G6). GRPO is not built. Status of each arm is reported in `engine/eval` results, including arms that did not run.
 
 ## Data
 
