@@ -143,3 +143,76 @@ def test_run_passes_reasoning_effort(tmp_path):
     client = R._client(args, {"MUSE_API_KEY": "k"})
     assert client.reasoning_effort == "low"
     assert R._client(_args(tmp_path), {"MUSE_API_KEY": "k"}).reasoning_effort == "minimal"
+
+
+# ---------------------------------------------------------------- HAC-28: replay cache (sharded realization)
+
+
+class _Counting:
+    model_id = "muse-spark-1.3"
+
+    def __init__(self):
+        self.n = 0
+        self.last_usage = None
+
+    def complete(self, messages, *, seed, **kw):
+        self.n += 1
+        self.last_usage = {"prompt_tokens": 10, "completion_tokens": 20}
+        return f"reply {seed} {kw.get('max_tokens')}?"
+
+
+def test_replay_client_records_and_replays(tmp_path):
+    path = tmp_path / "replay.jsonl"
+    msgs = [{"role": "user", "content": "x"}]
+    live = _Counting()
+    a = R.ReplayClient(live, path)
+    assert a.complete(msgs, seed=1) == "reply 1 None?"
+    assert a.complete(msgs, seed=1, max_tokens=512) == "reply 1 512?"
+    assert live.n == 2 and a.hits == 0
+    assert a.last_usage == {"prompt_tokens": 10, "completion_tokens": 20}
+
+    again = _Counting()
+    b = R.ReplayClient(again, path)  # reload from disk
+    assert b.complete(msgs, seed=1) == "reply 1 None?"
+    assert b.last_usage == {"prompt_tokens": 0, "completion_tokens": 0}  # a hit costs nothing
+    assert b.complete(msgs, seed=2) == "reply 2 None?"
+    assert again.n == 1 and b.hits == 1
+    assert b.model_id == "muse-spark-1.3"
+
+
+def test_replay_client_does_not_cache_failures(tmp_path):
+    from daypart.simmember.narrative import TruncatedResponseError
+
+    class _Bad(_Counting):
+        def complete(self, messages, *, seed, **kw):
+            raise TruncatedResponseError(256)
+
+    c = R.ReplayClient(_Bad(), tmp_path / "r.jsonl")
+    with pytest.raises(TruncatedResponseError):
+        c.complete([{"role": "user", "content": "x"}], seed=1)
+    assert not (tmp_path / "r.jsonl").exists() or (tmp_path / "r.jsonl").read_text() == ""
+
+
+def test_merge_replays_and_member_window(tmp_path):
+    p1, p2 = tmp_path / "a.jsonl", tmp_path / "b.jsonl"
+    R.ReplayClient(_Counting(), p1).complete([{"role": "user", "content": "x"}], seed=1)
+    R.ReplayClient(_Counting(), p2).complete([{"role": "user", "content": "y"}], seed=1)
+    out = tmp_path / "all.jsonl"
+    assert R.merge_replays([p1, p2, tmp_path / "missing.jsonl"], out) == 2
+    live = _Counting()
+    c = R.ReplayClient(live, out)
+    c.complete([{"role": "user", "content": "x"}], seed=1)
+    c.complete([{"role": "user", "content": "y"}], seed=1)
+    assert live.n == 0
+    args = _args(tmp_path, "--member-offset", "3", "--members", "2", "--replay", str(out))
+    assert args.member_offset == 3 and args.members == 2 and args.replay == str(out)
+
+
+def test_offline_run_window_and_replay(tmp_path):
+    rep = tmp_path / "replay.jsonl"
+    s = R.run(_args(tmp_path / "o", "--offline", "--members", "1", "--member-offset", "2", "--replay", str(rep)))
+    assert s["members_requested"] == 1 and s["narrative_rows"] > 0
+    assert rep.read_text().strip()
+    s2 = R.run(_args(tmp_path / "o2", "--offline", "--members", "1", "--member-offset", "2", "--replay", str(rep)))
+    assert s2["replay_hits"] == s2["calls"] > 0
+    assert s2["sft_sha256"] == s["sft_sha256"] and s2["dpo_sha256"] == s["dpo_sha256"]
