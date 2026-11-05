@@ -1,13 +1,14 @@
 """Unit tests — CONTRACT slice G (2.4 boundary eval, training summary, harness arms, dashboard data)."""
 
 import json
+from pathlib import Path
 
 import pydantic
 import pytest
 
 from daypart.ci import i1_check
 from daypart.demo import dashboard_data as dd
-from daypart.eval import ArmConfig, RunsConfig, load_runs, run
+from daypart.eval import ArmConfig, RunsConfig, dumps, load_runs, run
 from daypart.eval.boundary import (
     EVAL_MODELS,
     HELDOUT_CHECKINS,
@@ -346,3 +347,13 @@ def test_committed_training_record_summarizes():
     assert s["steps"] == 1018 and s["rows"] == 4072 and round(s["train_loss"], 3) == 0.084
     d = training_summary(rec, "dpo")
     assert d["steps"] == 78 and round(d["reward_margin"], 2) == 0.96
+
+
+def test_committed_metrics_match_harness(monkeypatch):
+    # QG F2: committing boundary_eval.json without regenerating metrics.json leaves the arms table
+    # saying "not run" next to real R3/R4 verdicts. Regenerate with `python -m daypart.eval --out
+    # ../docs/daypart/results/metrics.json` from engine/ (the boundary_eval entrypoint does it too).
+    engine = Path(__file__).resolve().parents[2]
+    monkeypatch.delenv("DAYPART_RESULTS_DIR", raising=False)
+    committed = (engine.parent / "docs" / "daypart" / "results" / "metrics.json").read_text(encoding="utf-8")
+    assert dumps(run(load_runs(), root=engine)) == committed

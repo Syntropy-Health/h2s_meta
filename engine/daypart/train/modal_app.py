@@ -29,6 +29,7 @@ adapter), from ``engine/`` with Modal credentials::
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path, PurePosixPath
 
@@ -453,6 +454,13 @@ def boundary_eval(
     print("R3:", json.dumps(report["r3"]))
     print("R4:", json.dumps(report["r4"]))
     print(f"wrote {out} and {VOLUME_NAME}:/results/boundary_eval.json")
+    # The committed metrics.json must move with boundary_eval.json (QG F2; unit test guards it).
+    from daypart.eval import dumps, load_runs, run
+
+    results = Path(out).resolve().parent
+    os.environ["DAYPART_RESULTS_DIR"] = str(results)
+    (results / "metrics.json").write_text(dumps(run(load_runs(), root=Path(__file__).resolve().parents[2])), encoding="utf-8")
+    print(f"regenerated {results.name}/metrics.json; commit it with {Path(out).name} and training.json")
 
 
 class ModalSdkBackend:
