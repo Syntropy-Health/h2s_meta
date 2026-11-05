@@ -415,7 +415,10 @@ def boundary_eval(
 
     training = _volume_jsonl("datasets/sft.jsonl") + _volume_jsonl("datasets/dpo.jsonl")
     exclude = training_user_turns(training)
-    prompts = heldout_prompts(generate(0), max_prompts=max_prompts, exclude_user_turns=exclude)
+    from daypart.eval import load_runs
+
+    cohort_seed = load_runs().cohort_seed  # the cohort the harness and I1 use
+    prompts = heldout_prompts(generate(cohort_seed), max_prompts=max_prompts, exclude_user_turns=exclude)
     est = cost_estimate(len(prompts), batch_size=batch_size, max_new_tokens=max_new_tokens, usd_per_s=H100_USD_PER_S)
     print(
         f"boundary_eval: {len(prompts)} held-out prompts x 3 models ({len(exclude)} training user turns excluded);"
@@ -433,6 +436,7 @@ def boundary_eval(
         "base_model": base_model,
         "adapters": adapters,
         "seed": seed,
+        "cohort_seed": cohort_seed,
         "decoding": "greedy",
         "max_new_tokens": max_new_tokens,
         "n_prompts": len(prompts),
