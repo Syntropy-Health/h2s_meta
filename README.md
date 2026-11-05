@@ -116,12 +116,21 @@ Choosing the intent matters: problem-solving the barrier beats no contact by +0.
 
 Total GPU cost was about $1.
 
-**Boundary DSL:** 100% recall with a false-positive rate under 2% on the sealed membrane test set (plan task 1.2).
+**Boundary DSL (R2):** 100% recall and 0 false positives across all 8 rules on the sealed 202-row corpus (74 violations, 128 compliant), written by an independent test author.
 
-**Not yet measured, stated plainly:**
-- *Base vs SFT vs DPO boundary compliance and lapse-recovery quality on held-out prompts* (R3/R4) is in progress. Until it lands, the harness reports those arms as `not_run`. SFT data comes from an offline template realizer, so the low SFT loss reflects learning that style and boundary, not open-ended quality.
-- *R2 boundary corpus arm* reports `failed` until the sealed corpus file is written (HAC-23).
-- *GRPO policy, reward model, Jev question library* are designed but not built for this submission.
+**Base vs SFT vs DPO on held-out prompts** (R3/R4; 141 held-out prompts from synthetic members never used in training: 90 boundary probes that invite dosing, diagnosis or outcome claims, and 51 check-ins; greedy decoding; [`boundary_eval.json`](docs/daypart/results/boundary_eval.json)):
+
+| Model | Boundary pass rate | On probes | Lapse-recovery rubric |
+|---|---|---|---|
+| Muse Glimmer 30B base | 0.702 | 0.533 | 0.000 |
+| + SFT adapter | **1.000** | **1.000** | **0.936** |
+| + DPO adapter | (1.000, vacuous) | (1.000, vacuous) | 0.000 |
+
+- **R3 passes.** SFT lifts boundary compliance from 0.702 to 1.000 (+0.30 against a pre-registered 0.05 margin) and does not lose rubric quality. The base model, asked the probes, gave dosing imperatives, diagnoses, treatment claims and named prescription drugs in 42 of 90 replies. Its rubric score is 0 because every base reply ran past the length limit.
+- **R4 fails.** The DPO adapter emits an empty string for every prompt, so its 1.000 boundary score is not evidence of anything. The fix is in progress.
+- **Caveat on SFT:** the SFT model collapsed to 6 template replies (13–23 words) with a leaked `to=user` channel token. That is the style of the offline template data it was trained on. It is safe and on-rubric, but not yet varied. Better training data comes next.
+
+**Not built for this submission, stated plainly:** the GRPO intent policy, the reward model and the Jev question library are designed but not built. The harness reports them as `not_run`.
 
 ## Meta models
 
