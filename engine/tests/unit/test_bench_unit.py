@@ -357,3 +357,90 @@ def test_committed_metrics_match_harness(monkeypatch):
     monkeypatch.delenv("DAYPART_RESULTS_DIR", raising=False)
     committed = (engine.parent / "docs" / "daypart" / "results" / "metrics.json").read_text(encoding="utf-8")
     assert dumps(run(load_runs(), root=engine)) == committed
+
+
+# ---------------------------------------------------------------- QG coverage (F4)
+
+
+def test_aggregate_counts_a_repeated_rule_once():
+    rid = sorted(dsl.RULE_IDS)[0]
+    row = {"prompt_id": "x", "kind": "probe", "boundary_passed": False, "rule_ids": [rid, rid],
+           "rubric_passed": False, "rubric_failed": ["invitation", "invitation"]}
+    agg = aggregate([row])
+    assert list(agg["violations_by_rule"]) == sorted(dsl.RULE_IDS)
+    assert agg["violations_by_rule"][rid] == 1 and sum(agg["violations_by_rule"].values()) == 1
+    assert agg["rubric_failed_by_check"]["invitation"] == 1
+
+
+def test_verdicts_r4_counts_every_regression():
+    sft = [{"prompt_id": p, "boundary_passed": True} for p in "abc"]
+    dpo = [{"prompt_id": "a", "boundary_passed": False}, {"prompt_id": "b", "boundary_passed": False},
+           {"prompt_id": "c", "boundary_passed": True}, {"prompt_id": "z", "boundary_passed": False}]
+    v = verdicts({"sft": _agg(1.0, 0.5), "dpo": _agg(0.25, 0.7)}, responses={"sft": sft, "dpo": dpo})["r4"]
+    assert v["boundary_regressions"] == 2 and v["rubric_delta"] == 0.2 and v["passed"] is False
+    slip = verdicts({"sft": _agg(0.9, 0.7), "dpo": _agg(0.9, 0.6)}, responses={"sft": sft, "dpo": sft})["r4"]
+    assert slip["boundary_regressions"] == 0 and slip["passed"] is False
+
+
+def test_boundary_arms_fail_honestly_without_changing_status(tmp_path, monkeypatch):
+    from daypart.eval import exit_code
+
+    monkeypatch.delenv("DAYPART_RESULTS_DIR", raising=False)
+    (tmp_path / "boundary_eval.json").write_text(json.dumps(_report(dpo=UNSAFE))  # R3: no gain; R4: dpo regresses)
+    (tmp_path / "training.json").write_text(json.dumps(RECORD))
+    out = run(_bench_config(tmp_path))
+    arms = {a["name"]: a for a in out["arms"]}
+    assert out["summary"] == {"ok": 3, "not_run": 0, "failed": 0} and exit_code(out) == 0
+    assert set(arms["base"]["metrics"]) == {"model", "boundary", "prompt_set_version", "margin", "r3"}
+    assert set(arms["sft"]["metrics"]) == {"model", "boundary", "prompt_set_version", "margin", "r3", "training"}
+    assert set(arms["dpo"]["metrics"]) == {"model", "boundary", "prompt_set_version", "margin", "r4", "training"}
+    assert arms["dpo"]["metrics"]["r4"]["passed"] is False and arms["sft"]["metrics"]["r3"]["passed"] is False
+    assert arms["dpo"]["metrics"]["training"] == training_summary(RECORD, "dpo")
+
+
+def test_boundary_arms_failed_paths(tmp_path, monkeypatch):
+    monkeypatch.delenv("DAYPART_RESULTS_DIR", raising=False)
+    (tmp_path / "boundary_eval.json").write_text(json.dumps(_report()))
+    (tmp_path / "training.json").write_text("{")
+    arms = _arms(tmp_path)
+    assert (arms["base"]["status"], arms["sft"]["status"], arms["dpo"]["status"]) == ("ok", "failed", "failed")
+    (tmp_path / "training.json").write_text(json.dumps({"sft": RECORD["sft"]}))
+    arms = _arms(tmp_path)
+    assert (arms["sft"]["status"], arms["dpo"]["status"]) == ("ok", "failed")
+    (tmp_path / "training.json").write_text(json.dumps(RECORD))
+    partial = build_report({"base": _report()["models"]["base"]["responses"]}, meta={})
+    (tmp_path / "boundary_eval.json").write_text(json.dumps(partial))
+    arms = _arms(tmp_path)
+    assert arms["dpo"]["status"] == "failed" and "'dpo'" in arms["dpo"]["reason"]
+    assert str(tmp_path) not in json.dumps(arms)
+
+
+def test_boundary_arms_env_override_positive_and_missing_names(tmp_path, monkeypatch):
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "boundary_eval.json").write_text(json.dumps(_report()))
+    monkeypatch.setenv("DAYPART_RESULTS_DIR", str(real))
+    arms = _arms("does/not/exist")
+    assert arms["base"]["status"] == "ok"
+    assert arms["sft"]["status"] == "not_run" and "training.json" in arms["sft"]["reason"]
+    assert "boundary_eval.json" not in arms["sft"]["reason"] and str(real) not in arms["sft"]["reason"]
+    monkeypatch.delenv("DAYPART_RESULTS_DIR")
+    reason = _arms(tmp_path / "empty")["dpo"]["reason"]
+    assert "boundary_eval.json" in reason and "training.json" in reason and str(tmp_path) not in reason
+
+
+def test_cost_estimate_rejects_every_count_below_one():
+    for kw in ({"n_models": 0}, {"batch_size": 0}, {"max_new_tokens": 0}):
+        with pytest.raises(ValueError):
+            cost_estimate(10, **kw)
+    with pytest.raises(ValueError):
+        cost_estimate(-1)
+
+
+def test_build_report_model_subsets():
+    rows = _report()["models"]["base"]["responses"]
+    only_base = build_report({"base": rows}, meta={})
+    assert only_base["r3"] is None and only_base["r4"] is None
+    assert build_report({"base": rows, "sft": rows}, meta={})["r4"] is None
+    with pytest.raises(ValueError):
+        build_report({"sft": rows, "grpo": rows}, meta={})
