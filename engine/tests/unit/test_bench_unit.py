@@ -386,7 +386,7 @@ def test_boundary_arms_fail_honestly_without_changing_status(tmp_path, monkeypat
     from daypart.eval import exit_code
 
     monkeypatch.delenv("DAYPART_RESULTS_DIR", raising=False)
-    (tmp_path / "boundary_eval.json").write_text(json.dumps(_report(dpo=UNSAFE))  # R3: no gain; R4: dpo regresses)
+    (tmp_path / "boundary_eval.json").write_text(json.dumps(_report(dpo=UNSAFE)))  # R3: no gain; R4: dpo regresses
     (tmp_path / "training.json").write_text(json.dumps(RECORD))
     out = run(_bench_config(tmp_path))
     arms = {a["name"]: a for a in out["arms"]}
