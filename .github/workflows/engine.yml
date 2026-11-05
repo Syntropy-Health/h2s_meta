@@ -1,0 +1,67 @@
+name: engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "daypart/**"]
+    paths: ["engine/**", "docs/daypart/**", ".github/workflows/engine.yml"]
+  pull_request:
+    paths: ["engine/**", "docs/daypart/**", ".github/workflows/engine.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install (pinned LHM with scoring extra)
+        run: uv sync --locked
+      - name: LHM scoring extra present (D8 / failure table)
+        run: uv run python -c "from syntropy.lhm.metrics.scoring import SCORING_AVAILABLE; assert SCORING_AVAILABLE, 'lhm-scoring extra missing'"
+      - name: Sealed + unit tests
+        run: uv run pytest -q
+      - name: I1 — curated-25 never in generated training artifacts
+        run: uv run python -m daypart.ci.i1_check
+  attribution-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pre-existing LHM baseline untouched
+        run: test -z "$(git diff --stat f170784 HEAD -- syntropy tests pyproject.toml uv.lock)"
+  deploy-demo:
+    # Redeploys the hosted demo (FastAPI playground + Streamlit results dashboard) to Modal once the
+    # suite passes on the staging trunk (daypart/build) or main. A job here rather than a workflow_run
+    # workflow: workflow_run only fires for workflows on the default branch.
+    needs: [test, attribution-boundary]
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/daypart/build')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-demo
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: engine
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      MODAL_IMAGE_BUILDER_VERSION: "2025.06"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Deploy to Modal
+        run: uv run --no-project --with modal==1.6.3 modal deploy deploy/modal_demo.py
+      - name: Smoke the public endpoints
+        run: |
+          P=https://supermomo668--daypart-demo-playground.us-east.modal.run
+          curl -fsS -m 180 "$P/api/health"
+          curl -fsS -m 180 -o /dev/null "$P/"
+          curl -fsS -m 180 -o /dev/null https://supermomo668--daypart-demo-dashboard.us-east.modal.run/_stcore/health

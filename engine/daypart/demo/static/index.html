@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daypart playground</title>
+<style>
+  :root {
+    --surface: #fcfcfb; --panel: #ffffff; --ink: #1f1f1e; --ink-2: #55554f; --ink-3: #7a7a73;
+    --rule: #e4e3df; --accent: #2a78d6;
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--surface);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--rule); background: var(--panel); }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px 24px;
+         max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; padding: 12px; } header { padding: 12px; } }
+  section { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; min-width: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  h3 { font-size: 13px; margin: 16px 0 6px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+  label { display: block; font-size: 12px; color: var(--ink-2); margin: 8px 0 4px; }
+  select, input, textarea, button { font: inherit; font-size: 14px; }
+  select, input, textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 6px; background: #fff; }
+  textarea { min-height: 64px; resize: vertical; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; } .row > * { flex: 1 1 120px; }
+  button { margin-top: 12px; padding: 8px 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .muted { color: var(--ink-3); font-size: 13px; }
+  .obs { font-size: 13px; background: var(--surface); border-radius: 6px; padding: 8px; margin: 8px 0 0; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 13px; }
+  .kv dt { color: var(--ink-2); } .kv dd { margin: 0; overflow-wrap: anywhere; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+           font-weight: 600; border: 1px solid currentColor; }
+  .badge.pass, .badge.ready { color: #076b07; } .badge.escalate { color: #a32626; } .badge.withheld { color: #8a5a00; }
+  .rule { font-family: ui-monospace, monospace; font-size: 12px; background: #fbe9e9; color: #8c1f1f; padding: 1px 6px; border-radius: 4px; margin-right: 4px; }
+  ol.log { list-style: none; padding: 0; margin: 0; max-height: 360px; overflow: auto; }
+  ol.log li { border-top: 1px solid var(--rule); padding: 8px 0; font-size: 13px; }
+  .days { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 6px; }
+  .day { width: 14px; height: 14px; border-radius: 3px; background: var(--rule); }
+  .day.y { background: var(--good); } .day.n { background: var(--serious); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  .card { border: 1px solid var(--rule); border-radius: 8px; padding: 10px; }
+  .card .val { font-size: 22px; font-weight: 650; margin: 4px 0; }
+  .card ul { margin: 4px 0 0; padding-left: 16px; font-size: 12px; color: var(--ink-2); }
+  .err { color: var(--critical); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Daypart playground</h1>
+  <p>Synthetic SimMembers only. Operator tool, not a consumer UI. Not medical advice.
+     <a href="/results">Benchmark results</a> · <a href="/docs">API</a></p>
+</header>
+<main>
+  <section aria-labelledby="ep-h">
+    <h2 id="ep-h">Episode</h2>
+    <label for="member">Generated member</label>
+    <select id="member"></select>
+    <p id="member-info" class="muted"></p>
+    <div class="row">
+      <div><label for="seed">Seed</label><input id="seed" type="number" value="0"></div>
+      <div><label for="horizon">Horizon (days)</label><input id="horizon" type="number" value="14" min="1" max="42"></div>
+    </div>
+    <button id="start">Start episode</button>
+    <p id="obs" class="obs" hidden></p>
+
+    <h3>Step</h3>
+    <label for="intent">Intent</label>
+    <select id="intent"></select>
+    <label for="text">Draft (edit to test the membrane)</label>
+    <textarea id="text"></textarea>
+    <button id="step" disabled>Send draft</button>
+    <p id="err" class="err" role="alert"></p>
+
+    <h3>Last step</h3>
+    <dl id="last" class="kv"><dt>Status</dt><dd class="muted">No step yet.</dd></dl>
+    <h3>Adherence</h3>
+    <div id="days" class="days" aria-label="Adherence by day"></div>
+    <h3>Log</h3>
+    <ol id="log" class="log"></ol>
+  </section>
+
+  <section aria-labelledby="pp-h">
+    <h2 id="pp-h">Pattern passport</h2>
+    <div class="row">
+      <div><label for="pday">As of day</label><input id="pday" type="number" value="41" min="0" max="42"></div>
+    </div>
+    <button id="ppbtn" class="secondary">Show passport</button>
+    <p id="pp-meta" class="muted"></p>
+    <div id="cards" class="cards"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+let intents = [], members = [], episode = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts && { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(opts) });
+  const body = await r.json();
+  if (!r.ok) throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
+  return body;
+}
+function showErr(e) { $("err").textContent = e ? String(e.message || e) : ""; }
+
+function memberInfo() {
+  const m = members.find((x) => x.member_id === $("member").value);
+  $("member-info").textContent = m ? `Motivation ${m.motivation} · barrier ${m.barrier_type.replaceAll("_", " ")} · literacy ${m.literacy} · ${m.engagement_pattern.replaceAll("_", " ")}` : "";
+}
+function setDefaultText() { const i = intents.find((x) => x.intent === $("intent").value); $("text").value = i ? i.default_text : ""; }
+
+function renderDays(state) {
+  const box = $("days"); box.replaceChildren();
+  for (let d = 0; d < episode.horizon; d++) {
+    const a = state.adherence[d];
+    const c = el("span", "day" + (a === true ? " y" : a === false ? " n" : ""));
+    c.title = `Day ${d + 1}: ${a === true ? "logged" : a === false ? "not logged" : "pending"}`;
+    box.append(c);
+  }
+}
+
+function renderStep(s) {
+  const dl = $("last"); dl.replaceChildren();
+  const add = (k, v) => { dl.append(el("dt", null, k)); const dd = el("dd"); typeof v === "string" ? dd.textContent = v : dd.append(v); dl.append(dd); };
+  add("Day", `${s.state.day} / ${episode.horizon}`);
+  add("Draft", s.draft);
+  const verdict = el("span"); verdict.append(el("span", "badge " + s.membrane.decision, s.membrane.decision));
+  add("Membrane", verdict);
+  add("Layer 0", s.membrane.layer0.outcome);
+  const hits = el("span");
+  if (s.dsl_hits.length) s.dsl_hits.forEach((v) => hits.append(el("span", "rule", v)));
+  else hits.textContent = "none";
+  add("DSL hits", hits);
+  add("Reward", s.reward.toFixed(1));
+  add("Member", s.reply);
+  const li = el("li", null, `Day ${s.state.day} · ${s.intent} · ${s.membrane.decision} · reward ${s.reward.toFixed(1)}${s.done ? " · done" : ""}`);
+  $("log").prepend(li);
+  renderDays(s.state);
+  $("step").disabled = s.done;
+}
+
+async function start() {
+  showErr();
+  try {
+    episode = await api("/api/episodes", { member_id: $("member").value, seed: Number($("seed").value), horizon: Number($("horizon").value) });
+    $("obs").hidden = false; $("obs").textContent = episode.observation;
+    $("log").replaceChildren(); $("last").replaceChildren(el("dt", null, "Status"), el("dd", "muted", "Episode started."));
+    renderDays(episode.state); $("step").disabled = false;
+    passport();
+  } catch (e) { showErr(e); }
+}
+
+async function step() {
+  showErr();
+  try { renderStep(await api(`/api/episodes/${episode.episode_id}/step`, { intent: $("intent").value, text: $("text").value })); }
+  catch (e) { showErr(e); }
+}
+
+async function passport() {
+  showErr();
+  try {
+    const p = await api(`/api/members/${encodeURIComponent($("member").value)}/passport?day=${Number($("pday").value)}`);
+    $("pp-meta").textContent = `${p.member_id} · day ${p.day} · ontology ${p.ontology_version}`;
+    const box = $("cards"); box.replaceChildren();
+    for (const f of p.flags) {
+      const c = el("article", "card");
+      c.append(el("strong", null, f.title), document.createTextNode(" "), el("span", "badge " + f.status, f.status));
+      if (f.status === "ready") {
+        const iv = f.interval ? ` (${f.interval[0].toFixed(1)} to ${f.interval[1].toFixed(1)})` : "";
+        c.append(el("div", "val", f.value.toFixed(1) + iv));
+        const ul = el("ul"); f.caveats.forEach((cv) => ul.append(el("li", null, cv))); c.append(ul);
+      } else {
+        c.append(el("div", "muted", f.message));
+      }
+      c.append(el("div", "muted", `${f.code} · pending ${f.pending.join(", ")}`));
+      box.append(c);
+    }
+  } catch (e) { showErr(e); }
+}
+
+(async () => {
+  try {
+    [intents, members] = await Promise.all([api("/api/intents"), api("/api/members")]);
+    for (const m of members) $("member").append(new Option(m.member_id, m.member_id));
+    for (const i of intents) $("intent").append(new Option(i.intent.replaceAll("_", " "), i.intent));
+    $("intent").value = "barrier_problem_solving";
+    memberInfo(); setDefaultText(); passport();
+  } catch (e) { showErr(e); }
+})();
+$("member").addEventListener("change", () => { memberInfo(); passport(); });
+$("intent").addEventListener("change", setDefaultText);
+$("start").addEventListener("click", start);
+$("step").addEventListener("click", step);
+$("ppbtn").addEventListener("click", passport);
+</script>
+</body>
+</html>

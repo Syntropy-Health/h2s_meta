@@ -1,0 +1,794 @@
+"""Deploy-only Modal app for Daypart SFT + DPO (``modal deploy daypart/train/modal_app.py``).
+
+This is the ONLY module under ``daypart`` that imports ``modal``. It is never
+imported by ``daypart.train`` and is not exercised by tests (needs Modal
+credentials). The volume layout is::
+
+    /vol/datasets/<file>.jsonl        uploaded by the run phase (or ``smoke``)
+    /vol/checkpoints/<spec.name>/...  trainer checkpoints (resume source)
+    /vol/adapters/<spec.name>/        final LoRA adapter
+    /hf/                              Hugging Face cache (base weights, ~60 GB)
+
+Base model: ``meta-models/Muse-Glimmer-30B`` (``MuseGlimmerForConditionalGeneration``,
+29.8B bf16). It is trained text-only as 4-bit QLoRA (bitsandbytes nf4) on one
+H100: LoRA sits on the language tower only (:func:`language_lora_targets`); the
+vision tower, adapter and projection stay frozen in bf16 and never run.
+
+Everything at once, server-side (HAC-28): Muse data in member shards, SFT, DPO, 2.4 eval. Needs the
+``daypart-muse`` Modal secret (``MUSE_API_KEY``). ``pipeline`` prints a call id and returns; a later run
+fetches the results with ``collect``::
+
+    uv run --with modal modal deploy daypart/train/modal_app.py
+    uv run --with modal modal run daypart/train/modal_app.py::pipeline
+    uv run --with modal modal run daypart/train/modal_app.py::collect --call-id fc-...
+
+Training (SFT then DPO), from ``engine/``, on Muse-realized data only (``train`` refuses
+offline/template datasets; HAC-28)::
+
+    python -m daypart.train.run --out /tmp/daypart-data          # Muse credentials, spend-capped
+    uv run --with modal modal deploy daypart/train/modal_app.py
+    uv run --with modal modal run daypart/train/modal_app.py::train --data-dir /tmp/daypart-data
+
+2.4 boundary eval (base vs base+SFT vs base+DPO on held-out prompts, greedy, fixed seed;
+adapters default to ``/vol/results/training.json``); writes ``/vol/results/boundary_eval.json``
+and a local copy to commit::
+
+    uv run --with modal modal run daypart/train/modal_app.py::boundary_eval --out ../docs/daypart/results/boundary_eval.json
+
+Smoke step (2 SFT steps on 16 rows, then 2 DPO steps on 16 pairs from that
+adapter), from ``engine/`` with Modal credentials::
+
+    python -m daypart.train.run --offline --out /tmp/daypart-data
+    uv run --with modal modal run daypart/train/modal_app.py::smoke --data-dir /tmp/daypart-data
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from pathlib import Path, PurePosixPath
+
+import modal
+
+from daypart.train.modal_jobs import JobSpec, PollResult, dpo_loss_kwargs, language_lora_targets
+
+APP_NAME = "daypart-train"
+VOLUME_NAME = "daypart-train"
+HF_CACHE_VOLUME_NAME = "daypart-hf-cache"
+VOL = "/vol"
+HF_HOME = "/hf"
+BASE_MODEL = "meta-models/Muse-Glimmer-30B"
+#: Modal list price for one H100, USD per second ($3.95/h). Used only for the smoke estimate.
+H100_USD_PER_S = 0.001097
+
+app = modal.App(APP_NAME)
+volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
+hf_cache = modal.Volume.from_name(HF_CACHE_VOLUME_NAME, create_if_missing=True)
+
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install(
+        "torch==2.14.1",
+        "transformers==5.22.1",  # first release line with model_type muse_glimmer
+        "peft==0.21.2",
+        "trl==1.17.1",  # its fused LM head applies Muse Glimmer's output_multiplier + logit softcap
+        "accelerate==1.15.0",
+        "bitsandbytes==0.50.2",
+        "datasets==5.1.0",
+        "pydantic>=2.7,<3",
+    )
+    .env({"HF_HOME": HF_HOME, "HF_XET_HIGH_PERFORMANCE": "1", "TOKENIZERS_PARALLELISM": "false"})
+    .add_local_python_source("daypart")
+)
+
+_GPU = "H100"
+_TIMEOUT_S = 14400
+_VOLUMES = {VOL: volume, HF_HOME: hf_cache}
+#: Kept in bf16 (not quantized): the output head and the unused vision side.
+_KEEP_BF16 = ("lm_head", "vision_tower", "vision_adapter", "vision_projection")
+
+
+def _vol_path(rel: str) -> str:
+    return rel if rel.startswith("/") else str(PurePosixPath(VOL) / rel)
+
+
+@app.function(image=image, volumes={HF_HOME: hf_cache}, cpu=4, memory=8192, timeout=3600)
+def prefetch_base(base_model: str = BASE_MODEL) -> dict:
+    """Download the base weights into the HF cache volume on CPU, so GPU time is not spent downloading."""
+    from huggingface_hub import snapshot_download
+
+    t0 = time.monotonic()
+    path = snapshot_download(base_model)
+    hf_cache.commit()
+    return {"path": path, "seconds": round(time.monotonic() - t0, 1)}
+
+
+def _load_base(spec: JobSpec):
+    import torch
+    from transformers import AutoModelForImageTextToText, AutoTokenizer, BitsAndBytesConfig
+
+    tokenizer = AutoTokenizer.from_pretrained(spec.base_model)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    quant = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        llm_int8_skip_modules=list(_KEEP_BF16),
+    )
+    # MuseGlimmerForConditionalGeneration; fed input_ids only, so the vision tower never runs.
+    model = AutoModelForImageTextToText.from_pretrained(
+        spec.base_model, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0}
+    )
+    model.config.get_text_config().use_cache = False
+    return model, tokenizer
+
+
+def _lora_config(spec: JobSpec):
+    from peft import LoraConfig as PeftLoraConfig
+
+    return PeftLoraConfig(
+        r=spec.lora.rank,
+        lora_alpha=spec.lora.alpha,
+        lora_dropout=spec.lora.dropout,
+        target_modules=language_lora_targets(spec.lora.target_modules),
+        task_type="CAUSAL_LM",
+    )
+
+
+def _common_args(spec: JobSpec, max_steps: int | None) -> dict:
+    smoke = max_steps is not None
+    return {
+        "output_dir": _vol_path(spec.checkpoint_dir + ("-smoke" if smoke else "")),
+        "num_train_epochs": spec.epochs,
+        "max_steps": max_steps if smoke else -1,
+        "learning_rate": spec.learning_rate,
+        "per_device_train_batch_size": spec.batch_size,
+        "max_length": spec.max_seq_len,
+        "seed": spec.seed,
+        "bf16": True,
+        "gradient_checkpointing": True,
+        "gradient_checkpointing_kwargs": {"use_reentrant": False},
+        "optim": "paged_adamw_8bit",
+        "logging_steps": 1 if smoke else 10,
+        "save_strategy": "no" if smoke else "steps",
+        "save_steps": 100,
+        "save_total_limit": 3,
+        "report_to": [],
+    }
+
+
+def _load_rows(spec: JobSpec, keep: tuple[str, ...], max_rows: int | None):
+    from datasets import load_dataset
+
+    dataset = load_dataset("json", data_files=_verify_dataset(spec), split="train")
+    dataset = dataset.remove_columns([c for c in dataset.column_names if c not in keep])
+    if max_rows is not None:
+        dataset = dataset.select(range(min(max_rows, len(dataset))))
+    return dataset
+
+
+def _step_timer():
+    from transformers import TrainerCallback
+
+    class StepTimer(TrainerCallback):
+        def __init__(self) -> None:
+            self.step_s: list[float] = []
+            self._t = 0.0
+
+        def on_step_begin(self, args, state, control, **kwargs):
+            self._t = time.monotonic()
+
+        def on_step_end(self, args, state, control, **kwargs):
+            self.step_s.append(round(time.monotonic() - self._t, 2))
+
+    return StepTimer()
+
+
+def _finish(trainer, tokenizer, spec: JobSpec, smoke: bool, timer, t0: float, t_loaded: float, t_trained: float) -> dict:
+    import torch
+
+    adapter_dir = _vol_path(f"adapters/{spec.name}" + ("-smoke" if smoke else ""))
+    trainer.model.save_pretrained(adapter_dir)
+    tokenizer.save_pretrained(adapter_dir)
+    volume.commit()
+    return {
+        "adapter": adapter_dir,
+        "steps": trainer.state.global_step,
+        "rows": len(trainer.train_dataset),
+        "load_s": round(t_loaded - t0, 1),
+        "train_s": round(t_trained - t_loaded, 1),
+        "step_s": timer.step_s,
+        "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 1),
+        "log_tail": trainer.state.log_history[-5:],
+    }
+
+
+@app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
+def sft_train(
+    spec_json: str, resume_from: str | None = None, max_steps: int | None = None, max_rows: int | None = None
+) -> dict:
+    """SFT. ``max_steps``/``max_rows`` set make it a smoke run (no checkpoints, ``-smoke`` adapter)."""
+    from trl import SFTConfig, SFTTrainer
+
+    t0 = time.monotonic()
+    spec = JobSpec.model_validate(json.loads(spec_json))
+    if spec.kind != "sft":
+        raise ValueError("sft_train requires an sft spec")
+    volume.reload()
+    dataset = _load_rows(spec, ("messages",), max_rows)
+    model, tokenizer = _load_base(spec)
+    t_loaded = time.monotonic()
+    timer = _step_timer()
+    trainer = SFTTrainer(
+        model=model,
+        args=SFTConfig(**_common_args(spec, max_steps)),
+        train_dataset=dataset,
+        processing_class=tokenizer,  # a tokenizer, not the processor: text-only training
+        peft_config=_lora_config(spec),
+        callbacks=[timer],
+    )
+    trainer.model.print_trainable_parameters()
+    trainer.train(resume_from_checkpoint=_vol_path(resume_from) if resume_from else None)
+    t_trained = time.monotonic()
+    return _finish(trainer, tokenizer, spec, max_steps is not None, timer, t0, t_loaded, t_trained)
+
+
+@app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
+def dpo_train(
+    spec_json: str, resume_from: str | None = None, max_steps: int | None = None, max_rows: int | None = None
+) -> dict:
+    """DPO from the SFT adapter. ``max_steps``/``max_rows`` as in :func:`sft_train`."""
+    from peft import PeftModel
+    from trl import DPOConfig, DPOTrainer
+
+    t0 = time.monotonic()
+    spec = JobSpec.model_validate(json.loads(spec_json))
+    if spec.kind != "dpo" or not spec.init_adapter or spec.beta is None:
+        raise ValueError("dpo_train requires a dpo spec with init_adapter and beta")
+    volume.reload()
+    dataset = _load_rows(spec, ("prompt", "chosen", "rejected"), max_rows)
+    base, tokenizer = _load_base(spec)
+    model = PeftModel.from_pretrained(base, _vol_path(spec.init_adapter), is_trainable=True)
+    t_loaded = time.monotonic()
+    timer = _step_timer()
+    trainer = DPOTrainer(
+        model=model,
+        ref_model=None,  # PEFT: TRL copies the SFT adapter into a frozen "ref" adapter
+        args=DPOConfig(beta=spec.beta, **dpo_loss_kwargs(spec), **_common_args(spec, max_steps)),
+        train_dataset=dataset,
+        processing_class=tokenizer,
+        callbacks=[timer],
+    )
+    trainer.train(resume_from_checkpoint=_vol_path(resume_from) if resume_from else None)
+    t_trained = time.monotonic()
+    return _finish(trainer, tokenizer, spec, max_steps is not None, timer, t0, t_loaded, t_trained)
+
+
+def _verify_dataset(spec: JobSpec) -> str:
+    import hashlib
+
+    path = _vol_path(spec.dataset_path)
+    with open(path, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    if digest != spec.dataset_sha256:
+        raise ValueError(f"dataset {spec.dataset_path} sha256 mismatch: {digest} != {spec.dataset_sha256}")
+    return path
+
+
+def upload_datasets(*paths: str | Path) -> None:
+    """Upload local JSONL files to ``/vol/datasets/<name>`` (where :func:`sft_spec`/:func:`dpo_spec` point)."""
+    with volume.batch_upload(force=True) as batch:
+        for p in map(Path, paths):
+            batch.put_file(str(p), f"/datasets/{p.name}")
+
+
+def _cost_line(label: str, run: dict, rows_full: int, epochs: int, batch_size: int) -> str:
+    steady = run["step_s"][-1]  # step 1 carries CUDA warm-up
+    steps = -(-rows_full * epochs // batch_size)
+    seconds = run["load_s"] + steps * steady
+    return (
+        f"{label}: {steps} steps x {steady}s + {run['load_s']}s load = {seconds / 60:.0f} min"
+        f" ~ ${seconds * H100_USD_PER_S:.2f} (H100 at ${H100_USD_PER_S * 3600:.2f}/h)"
+    )
+
+
+@app.local_entrypoint()
+def smoke(data_dir: str, base_model: str = BASE_MODEL, rows: int = 16, steps: int = 2, dpo: bool = True) -> None:
+    """Upload data, prefetch weights, run ``steps`` SFT (+ DPO) steps on ``rows`` rows, print an estimate."""
+    from daypart.train.modal_jobs import dpo_spec, sft_spec
+
+    t0 = time.monotonic()
+    sft_path, dpo_path = Path(data_dir) / "sft.jsonl", Path(data_dir) / "dpo.jsonl"
+    upload_datasets(sft_path, dpo_path)
+    print("prefetch:", prefetch_base.remote(base_model))
+    sft = sft_spec(base_model, sft_path)
+    out = sft_train.remote(sft.model_dump_json(), None, steps, rows)
+    print("sft smoke:", json.dumps(out, indent=1))
+    results = [("SFT", out, sum(1 for _ in sft_path.open()), sft)]
+    if dpo:
+        spec = dpo_spec(base_model, dpo_path, out["adapter"])
+        out = dpo_train.remote(spec.model_dump_json(), None, steps, rows)
+        print("dpo smoke:", json.dumps(out, indent=1))
+        results.append(("DPO", out, sum(1 for _ in dpo_path.open()), spec))
+    print(f"smoke wall clock: {time.monotonic() - t0:.0f}s (Modal billing: dashboard usage for app {APP_NAME})")
+    for label, run, n, spec in results:
+        print("estimate", _cost_line(label, run, n, spec.epochs, spec.batch_size))
+
+
+TRAINING_RECORD = "results/training.json"
+#: Below this many SFT rows or DPO pairs, ``train`` refuses to spend GPU time (one DPO batch is 8 pairs).
+MIN_TRAIN_ROWS = 32
+
+
+@app.function(image=image, volumes=_VOLUMES, cpu=1, memory=2048, timeout=2 * _TIMEOUT_S)
+def train_pipeline(sft_json: str, dpo_json: str) -> dict:
+    """SFT, then DPO from that adapter; writes ``/vol/results/training.json``. Spawn it on the deployed app."""
+    path = Path(_vol_path(TRAINING_RECORD))
+
+    def _write(record: dict) -> None:  # after each stage, so a DPO failure keeps the SFT record
+        volume.reload()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        volume.commit()
+
+    record = {"sft": sft_train.remote(sft_json)}
+    _write(record)
+    record["dpo"] = dpo_train.remote(dpo_json)
+    _write(record)
+    return record
+
+
+@app.local_entrypoint()
+def train(data_dir: str, base_model: str = BASE_MODEL, dry_run: bool = False) -> None:
+    """Upload ``sft.jsonl``/``dpo.jsonl`` and spawn :func:`train_pipeline` on the DEPLOYED app.
+
+    Refuses offline/template datasets (``summary.json``). Run ``modal deploy daypart/train/modal_app.py``
+    first: the spawned call belongs to the deployed app, so it outlives this process. Poll it with
+    ``modal.FunctionCall.from_id(<id>).get(timeout=0)``; the record lands in ``/vol/results/training.json``.
+    """
+    from daypart.train.modal_jobs import check_trainable, dpo_spec, sft_spec
+
+    data = Path(data_dir)
+    summary = json.loads((data / "summary.json").read_text(encoding="utf-8"))
+    check_trainable(summary)
+    sft_path, dpo_path = data / "sft.jsonl", data / "dpo.jsonl"
+    sft = sft_spec(base_model, sft_path)
+    dpo = dpo_spec(base_model, dpo_path, f"adapters/{sft.name}")
+    n_sft, n_dpo = (len(p.read_text(encoding="utf-8").splitlines()) for p in (sft_path, dpo_path))
+    if n_sft < MIN_TRAIN_ROWS or n_dpo < MIN_TRAIN_ROWS:
+        raise SystemExit(f"train: need >= {MIN_TRAIN_ROWS} SFT rows and DPO pairs, got {n_sft} and {n_dpo}")
+    print(f"train: {n_sft} SFT rows -> adapters/{sft.name}; {n_dpo} DPO pairs -> adapters/{dpo.name}")
+    print(f"  dpo: beta {dpo.beta}, lr {dpo.learning_rate}, rpo_alpha {dpo.rpo_alpha}; data from {summary['model_id']}")
+    if dry_run:
+        return
+    upload_datasets(sft_path, dpo_path)
+    call = modal.Function.from_name(APP_NAME, "train_pipeline").spawn(sft.model_dump_json(), dpo.model_dump_json())
+    print(f"spawned train_pipeline: {call.object_id}")
+
+
+def _trained_adapters() -> dict[str, str]:
+    """``{"sft": ..., "dpo": ...}`` volume-relative adapter paths from ``/vol/results/training.json``."""
+    try:
+        record = json.loads(b"".join(volume.read_file(TRAINING_RECORD)).decode("utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"no {TRAINING_RECORD} on volume {VOLUME_NAME} (run train first, or pass adapters): {exc}") from exc
+    return {m: str(PurePosixPath(record[m]["adapter"]).relative_to(VOL)) for m in ("sft", "dpo")}
+
+
+@app.function(image=image, gpu=_GPU, volumes=_VOLUMES, memory=32768, timeout=_TIMEOUT_S)
+def boundary_generate(
+    prompts_json: str,
+    adapters_json: str,
+    base_model: str = BASE_MODEL,
+    max_new_tokens: int = 512,
+    batch_size: int = 16,
+    seed: int = 0,
+) -> dict:
+    """Greedy replies per model: ``base`` (adapters disabled) plus one per named adapter.
+
+    Decodes with special tokens kept and returns the ``to=user`` reply (``chat_format``) plus the raw text.
+    """
+    import torch
+    from peft import PeftModel
+    from transformers import AutoModelForImageTextToText, AutoTokenizer, BitsAndBytesConfig
+
+    from daypart.train.chat_format import extract_reply
+
+    t0 = time.monotonic()
+    prompts = json.loads(prompts_json)
+    adapters: dict[str, str] = json.loads(adapters_json)
+    volume.reload()
+    torch.manual_seed(seed)
+    tokenizer = AutoTokenizer.from_pretrained(base_model)
+    tokenizer.padding_side = "left"
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    quant = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=torch.bfloat16,
+        llm_int8_skip_modules=list(_KEEP_BF16),
+    )
+    base = AutoModelForImageTextToText.from_pretrained(
+        base_model, quantization_config=quant, dtype=torch.bfloat16, device_map={"": 0}
+    )
+    model = None
+    for name, path in adapters.items():
+        if model is None:
+            model = PeftModel.from_pretrained(base, _vol_path(path), adapter_name=name)
+        else:
+            model.load_adapter(_vol_path(path), adapter_name=name)
+    model = model if model is not None else base
+    model.eval()
+    model.config.get_text_config().use_cache = True
+    t_loaded = time.monotonic()
+
+    texts = [
+        tokenizer.apply_chat_template(p["messages"], tokenize=False, add_generation_prompt=True) for p in prompts
+    ]
+
+    def _generate() -> list[str]:
+        """Raw decodes (special tokens kept), one per prompt."""
+        out: list[str] = []
+        for i in range(0, len(texts), batch_size):
+            enc = tokenizer(texts[i : i + batch_size], return_tensors="pt", padding=True, add_special_tokens=False)
+            enc = {k: v.to(0) for k, v in enc.items()}
+            with torch.no_grad():
+                ids = model.generate(
+                    **enc, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=tokenizer.pad_token_id
+                )
+            new = ids[:, enc["input_ids"].shape[1] :]
+            out += tokenizer.batch_decode(new, skip_special_tokens=False)
+        return out
+
+    raws: dict[str, list[str]] = {}
+    gen_s: dict[str, float] = {}
+    for name in ["base", *adapters]:
+        t = time.monotonic()
+        if name == "base" and adapters:
+            with model.disable_adapter():
+                raws[name] = _generate()
+        else:
+            if name != "base":
+                model.set_adapter(name)
+            raws[name] = _generate()
+        gen_s[name] = round(time.monotonic() - t, 1)
+    responses = {name: [extract_reply(r) for r in raw] for name, raw in raws.items()}
+    return {
+        "responses": responses,
+        "raw": raws,
+        "load_s": round(t_loaded - t0, 1),
+        "gen_s": gen_s,
+        "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 1),
+    }
+
+
+def _volume_jsonl(path: str) -> list[dict]:
+    try:
+        data = b"".join(volume.read_file(path))
+    except Exception as exc:  # FileNotFoundError surfaces under several Modal error types
+        raise SystemExit(f"cannot read {path} from volume {VOLUME_NAME}: {exc}") from exc
+    return [json.loads(line) for line in data.decode("utf-8").splitlines() if line.strip()]
+
+
+def _heldout(training: list[dict], max_prompts: int) -> tuple[list[dict], int, int]:
+    """Held-out prompts (I1 cohort, training user turns excluded) -> ``(prompts, n_excluded, cohort_seed)``."""
+    from daypart.eval import load_runs
+    from daypart.eval.boundary import heldout_prompts, training_user_turns
+    from daypart.simmember.cohort import generate
+
+    exclude = training_user_turns(training)
+    cohort_seed = load_runs().cohort_seed  # the cohort the harness and I1 use
+    prompts = heldout_prompts(generate(cohort_seed), max_prompts=max_prompts, exclude_user_turns=exclude)
+    return prompts, len(exclude), cohort_seed
+
+
+def _boundary_report(
+    prompts: list[dict], gen: dict, *, adapters: dict, base_model: str, seed: int, cohort_seed: int,
+    max_new_tokens: int, n_excluded: int, est: dict,
+) -> dict:
+    from daypart.eval.boundary import build_report, score_response
+
+    scored = {
+        m: [
+            {**score_response(p, t), "raw": r}
+            for p, t, r in zip(prompts, gen["responses"][m], gen["raw"][m], strict=True)
+        ]
+        for m in ("base", "sft", "dpo")
+    }
+    meta = {
+        "base_model": base_model,
+        "adapters": adapters,
+        "seed": seed,
+        "cohort_seed": cohort_seed,
+        "decoding": "greedy",
+        "reply": "to=user channel of the chat template (special tokens kept, chat_format.extract_reply)",
+        "max_new_tokens": max_new_tokens,
+        "n_prompts": len(prompts),
+        "n_excluded_training_turns": n_excluded,
+        "load_s": gen["load_s"],
+        "gen_s": gen["gen_s"],
+        "peak_gpu_gb": gen["peak_gpu_gb"],
+        "estimate": est,
+    }
+    return build_report(scored, meta=meta)
+
+
+def _print_report(report: dict) -> None:
+    for m in ("base", "sft", "dpo"):
+        agg = report["models"][m]
+        print(
+            f"{m:>4}: boundary {agg['boundary_pass_rate']:.3f}  rubric {agg['rubric_pass_rate']:.3f}  n={agg['n']}"
+            f"  degenerate {agg['degenerate']}  distinct {agg['distinct_responses']}"
+        )
+    print("R3:", json.dumps(report["r3"]))
+    print("R4:", json.dumps(report["r4"]))
+
+
+def write_metrics(out: str | Path) -> None:
+    """Regenerate the committed ``metrics.json`` next to ``out`` (it must move with boundary_eval.json; QG F2)."""
+    from daypart.eval import dumps, load_runs, run
+
+    results = Path(out).resolve().parent
+    os.environ["DAYPART_RESULTS_DIR"] = str(results)
+    (results / "metrics.json").write_text(dumps(run(load_runs(), root=Path(__file__).resolve().parents[2])), encoding="utf-8")
+    print(f"regenerated {results.name}/metrics.json; commit it with {Path(out).name} and training.json")
+
+
+@app.local_entrypoint()
+def boundary_eval(
+    out: str = "boundary_eval.json",
+    max_prompts: int = 300,
+    max_new_tokens: int = 512,
+    batch_size: int = 16,
+    seed: int = 0,
+    sft_adapter: str = "",
+    dpo_adapter: str = "",
+    base_model: str = BASE_MODEL,
+    dry_run: bool = False,
+) -> None:
+    """2.4: held-out prompts (I1-gated), greedy base/SFT/DPO generation on one H100, R3/R4 report."""
+    import io
+
+    from daypart.eval.boundary import cost_estimate
+
+    training = _volume_jsonl("datasets/sft.jsonl") + _volume_jsonl("datasets/dpo.jsonl")
+    prompts, n_excluded, cohort_seed = _heldout(training, max_prompts)
+    est = cost_estimate(len(prompts), batch_size=batch_size, max_new_tokens=max_new_tokens, usd_per_s=H100_USD_PER_S)
+    print(
+        f"boundary_eval: {len(prompts)} held-out prompts x 3 models ({n_excluded} training user turns excluded);"
+        f" expected ~{est['seconds'] / 60:.0f} min on one H100 ~ ${est['usd']:.2f}"
+        f" (H100 at ${H100_USD_PER_S * 3600:.2f}/h, {est['batches']} batches of {batch_size} x {max_new_tokens} tokens)"
+    )
+    if dry_run:
+        return
+    adapters = {"sft": sft_adapter, "dpo": dpo_adapter}
+    if not all(adapters.values()):
+        adapters = {**_trained_adapters(), **{m: a for m, a in adapters.items() if a}}
+    print(f"adapters: {adapters}")
+    gen = boundary_generate.remote(
+        json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed
+    )
+    report = _boundary_report(
+        prompts, gen, adapters=adapters, base_model=base_model, seed=seed, cohort_seed=cohort_seed,
+        max_new_tokens=max_new_tokens, n_excluded=n_excluded, est=est,
+    )
+    text = json.dumps(report, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
+    with volume.batch_upload(force=True) as batch:
+        batch.put_file(io.BytesIO(text.encode("utf-8")), "/results/boundary_eval.json")
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    Path(out).write_text(text, encoding="utf-8")
+    _print_report(report)
+    print(f"wrote {out} and {VOLUME_NAME}:/results/boundary_eval.json")
+    write_metrics(out)
+
+
+# --------------------------------------------------------------------------- #
+# HAC-28: the whole run server-side (Muse data -> SFT -> DPO -> 2.4 eval), one spawned call
+# --------------------------------------------------------------------------- #
+
+#: Modal secret holding ``MUSE_API_KEY`` (``modal secret create daypart-muse --from-dotenv ...``).
+MUSE_SECRET = "daypart-muse"
+DATA_ROOT = "data"
+PIPELINE_RECORD = "results/pipeline.json"
+
+data_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("numpy>=2,<3", "pydantic>=2.7,<3", "pyyaml>=6,<7", "fhir.resources==8.3.0", "fhaviary==0.37.0")
+    .add_local_python_source("daypart", "syntropy", ignore=["**/__pycache__/**", "**/tests/**"])
+)
+
+
+def _commit_json(rel: str, record: dict) -> None:
+    volume.reload()
+    path = Path(_vol_path(rel))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    volume.commit()
+
+
+def _run_args(out: Path, *extra: str, seed: int, reasoning_effort: str):
+    from daypart.train import run as R
+
+    return R.parse_args(["--out", str(out), "--seed", str(seed), "--reasoning-effort", reasoning_effort, *extra])
+
+
+@app.function(
+    image=data_image, volumes={VOL: volume}, secrets=[modal.Secret.from_name(MUSE_SECRET)],
+    cpu=1, memory=2048, timeout=4 * 3600, max_containers=32,
+)
+def realize_shard(tag: str, offset: int, count: int, seed: int = 0, reasoning_effort: str = "minimal",
+                  max_usd: float = 2.0, max_calls: int = 1000) -> dict:
+    """Muse realization for training members ``[offset, offset+count)``; records every call to a replay file."""
+    from daypart.train import run as R
+
+    out = Path(VOL) / DATA_ROOT / tag / f"shard-{offset:03d}"
+    summary = R.run(_run_args(
+        out, "--member-offset", str(offset), "--members", str(count), "--replay", str(out / "replay.jsonl"),
+        "--max-usd", str(max_usd), "--max-calls", str(max_calls), seed=seed, reasoning_effort=reasoning_effort,
+    ))
+    volume.commit()
+    return summary
+
+
+@app.function(
+    image=data_image, volumes={VOL: volume}, secrets=[modal.Secret.from_name(MUSE_SECRET)],
+    cpu=1, memory=4096, timeout=24 * 3600,
+)
+def full_pipeline(
+    tag: str, shards: int = 25, seed: int = 0, reasoning_effort: str = "minimal", max_usd: float = 40.0,
+    base_model: str = BASE_MODEL, max_prompts: int = 300, max_new_tokens: int = 512, batch_size: int = 16,
+) -> dict:
+    """Shards -> merged replay -> global data build -> ``check_trainable`` -> SFT -> DPO -> boundary eval.
+
+    Writes ``/vol/results/pipeline.json`` after each stage and ``/vol/results/boundary_eval.json`` at the end.
+    Spawn it on the deployed app (``pipeline`` entrypoint) and poll the call id; no local process needed.
+    """
+    import shutil
+
+    from daypart.eval.boundary import cost_estimate
+    from daypart.simmember.cohort import generate
+    from daypart.train import run as R
+    from daypart.train.modal_jobs import check_trainable, dpo_spec, sft_spec
+
+    _heldout([], 1)  # preflight: the eval imports/config work in this image before any spend
+    record: dict = {"tag": tag, "stage": "data", "started": time.time()}
+    _commit_json(PIPELINE_RECORD, record)
+    n = len(generate(seed).training_profiles())
+    size = -(-n // shards)
+    windows = [(tag, off, size, seed, reasoning_effort, max_usd / shards, 12000 // shards) for off in range(0, n, size)]
+    shard_summaries = list(realize_shard.starmap(windows, return_exceptions=True))
+    volume.reload()
+    root = Path(VOL) / DATA_ROOT / tag
+    full = root / "full"
+    merged = R.merge_replays([root / f"shard-{w[1]:03d}" / "replay.jsonl" for w in windows], full / "replay.jsonl")
+    summary = R.run(_run_args(full, "--replay", str(full / "replay.jsonl"), "--max-usd", "5", seed=seed,
+                              reasoning_effort=reasoning_effort))
+    shard_errors = [repr(s) for s in shard_summaries if isinstance(s, BaseException)]
+    record.update(stage="train", replay_entries=merged, data=summary, shard_errors=shard_errors[:10],
+                  shard_est_usd=round(sum(s["est_usd"] for s in shard_summaries if isinstance(s, dict)), 4),
+                  shard_member_failures=sum(s["member_failure_count"] for s in shard_summaries if isinstance(s, dict)))
+    _commit_json(PIPELINE_RECORD, record)
+    check_trainable(summary)
+    datasets = Path(VOL) / "datasets"
+    datasets.mkdir(parents=True, exist_ok=True)
+    for name in ("sft.jsonl", "dpo.jsonl", "summary.json"):
+        shutil.copyfile(full / name, datasets / name)
+    volume.commit()
+    sft = sft_spec(base_model, datasets / "sft.jsonl")
+    dpo = dpo_spec(base_model, datasets / "dpo.jsonl", f"adapters/{sft.name}")
+    if summary["sft_rows"] < MIN_TRAIN_ROWS or summary["dpo_pairs"] < MIN_TRAIN_ROWS:
+        raise RuntimeError(f"need >= {MIN_TRAIN_ROWS} SFT rows and DPO pairs, got {summary['sft_rows']}/{summary['dpo_pairs']}")
+    record["training"] = train_pipeline.remote(sft.model_dump_json(), dpo.model_dump_json())
+    record["stage"] = "eval"
+    _commit_json(PIPELINE_RECORD, record)
+
+    training = [json.loads(x) for p in ("sft.jsonl", "dpo.jsonl") for x in (datasets / p).read_text().splitlines() if x.strip()]
+    prompts, n_excluded, cohort_seed = _heldout(training, max_prompts)
+    est = cost_estimate(len(prompts), batch_size=batch_size, max_new_tokens=max_new_tokens, usd_per_s=H100_USD_PER_S)
+    adapters = {m: str(PurePosixPath(record["training"][m]["adapter"]).relative_to(VOL)) for m in ("sft", "dpo")}
+    gen = boundary_generate.remote(json.dumps(prompts), json.dumps(adapters), base_model, max_new_tokens, batch_size, seed)
+    report = _boundary_report(
+        prompts, gen, adapters=adapters, base_model=base_model, seed=seed, cohort_seed=cohort_seed,
+        max_new_tokens=max_new_tokens, n_excluded=n_excluded, est=est,
+    )
+    _commit_json("results/boundary_eval.json", report)
+    _print_report(report)
+    record.update(stage="done", finished=time.time(), r3=report["r3"], r4=report["r4"],
+                  models={m: {k: report["models"][m][k] for k in ("boundary_pass_rate", "rubric_pass_rate", "n",
+                                                                  "degenerate", "distinct_responses")}
+                          for m in ("base", "sft", "dpo")})
+    _commit_json(PIPELINE_RECORD, record)
+    return record
+
+
+@app.local_entrypoint()
+def pipeline(tag: str = "", shards: int = 25, max_usd: float = 40.0, reasoning_effort: str = "minimal") -> None:
+    """Spawn :func:`full_pipeline` on the DEPLOYED app and print the call id (returns at once)."""
+    tag = tag or time.strftime("hac28-%Y%m%dT%H%M%SZ", time.gmtime())
+    fn = modal.Function.from_name(APP_NAME, "full_pipeline")
+    call = fn.spawn(tag, shards=shards, max_usd=max_usd, reasoning_effort=reasoning_effort)
+    print(f"spawned full_pipeline tag={tag}: {call.object_id}")
+
+
+@app.local_entrypoint()
+def collect(call_id: str, out: str = "../docs/daypart/results/boundary_eval.json") -> None:
+    """Next run: fetch a finished :func:`full_pipeline` (``boundary_eval.json``, ``training.json``), regenerate metrics."""
+    rec = modal.FunctionCall.from_id(call_id).get(timeout=0)
+    results = Path(out).resolve().parent
+    for rel, dest in (("results/boundary_eval.json", Path(out)), (TRAINING_RECORD, results / "training.json"),
+                      (PIPELINE_RECORD, results / "pipeline.json")):
+        dest.write_bytes(b"".join(volume.read_file(rel)))
+        print(f"wrote {dest}")
+    print(json.dumps({k: rec[k] for k in ("r3", "r4", "models")}, indent=1))
+    write_metrics(out)
+
+
+class ModalSdkBackend:
+    """:class:`~daypart.train.modal_jobs.ModalBackend` over the deployed ``daypart-train`` app."""
+
+    def __init__(self, app_name: str = APP_NAME, volume_name: str = VOLUME_NAME) -> None:
+        self.app_name = app_name
+        self.volume_name = volume_name
+        self._checkpoint_dirs: dict[str, str] = {}
+
+    def submit(self, spec: JobSpec, *, resume_from: str | None) -> str:
+        fn_name = "sft_train" if spec.kind == "sft" else "dpo_train"
+        fn = modal.Function.from_name(self.app_name, fn_name)
+        call = fn.spawn(spec.model_dump_json(), resume_from)
+        self._checkpoint_dirs[call.object_id] = spec.checkpoint_dir
+        return call.object_id
+
+    def _latest_checkpoint(self, call_id: str) -> str | None:
+        ckpt_dir = self._checkpoint_dirs.get(call_id)
+        if ckpt_dir is None:
+            return None
+        vol = modal.Volume.from_name(self.volume_name)
+        try:
+            entries = vol.listdir(ckpt_dir)
+        except Exception:  # directory not created yet
+            return None
+        steps = []
+        for entry in entries:
+            name = PurePosixPath(entry.path).name
+            if name.startswith("checkpoint-") and name.split("-")[-1].isdigit():
+                steps.append((int(name.split("-")[-1]), str(PurePosixPath(ckpt_dir) / name)))
+        return max(steps)[1] if steps else None
+
+    def poll(self, call_id: str) -> PollResult:
+        call = modal.FunctionCall.from_id(call_id)
+        try:
+            out = call.get(timeout=0)
+        except TimeoutError:
+            return PollResult("running", checkpoint=self._latest_checkpoint(call_id))
+        except Exception as exc:
+            return PollResult(
+                "failed",
+                checkpoint=self._latest_checkpoint(call_id),
+                error=f"{type(exc).__name__}: {exc}",
+            )
+        adapter = out.get("adapter") if isinstance(out, dict) else None
+        return PollResult("succeeded", checkpoint=self._latest_checkpoint(call_id), adapter=adapter)
+
+
+__all__ = [
+    "APP_NAME",
+    "BASE_MODEL",
+    "ModalSdkBackend",
+    "app",
+    "boundary_eval",
+    "boundary_generate",
+    "dpo_train",
+    "hf_cache",
+    "prefetch_base",
+    "sft_train",
+    "smoke",
+    "train",
+    "train_pipeline",
+    "upload_datasets",
+    "volume",
+]

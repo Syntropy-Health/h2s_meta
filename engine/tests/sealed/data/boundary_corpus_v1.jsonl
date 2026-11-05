@@ -1,0 +1,202 @@
+{"id": "v-uq-01", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "You logged 500 mg of magnesium last night — nice consistency."}
+{"id": "v-uq-02", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "Your log shows 400MG at breakfast."}
+{"id": "v-uq-03", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "Yesterday you recorded four hundred milligrams with dinner."}
+{"id": "v-uq-04", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "You noted two capsules after lunch, all logged."}
+{"id": "v-uq-05", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "YOU LOGGED 1,000 IU OF VITAMIN D THIS MORNING."}
+{"id": "v-uq-06", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "You logged 5 m​l before bed."}
+{"id": "v-uq-07", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "You noted a couple of softgels with breakfast."}
+{"id": "v-uq-08", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "Your entry says 2 сapsules at noon."}
+{"id": "v-uq-09", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "You added ten drops to your water bottle."}
+{"id": "v-uq-10", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "You logged 250mcg at 7am."}
+{"id": "v-uq-11", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "Your shake had 2 scoops today."}
+{"id": "v-uq-12", "label": "violation", "rule_id": "dosing.unit_quantity", "crisis_context": false, "text": "You logged 2.5 ml with dinner."}
+{"id": "v-di-01", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "Tonight, take your medication right after dinner."}
+{"id": "v-di-02", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "Try to increase your dose next week."}
+{"id": "v-di-03", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "Maybe skip the meds on weekends."}
+{"id": "v-di-04", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "STOP TAKING IT IF YOU FEEL OFF."}
+{"id": "v-di-05", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "Go ahead and double up tomorrow to catch up."}
+{"id": "v-di-06", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "If you missed one, take an extra one tonight."}
+{"id": "v-di-07", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "You could lower the dosаge a bit."}
+{"id": "v-di-08", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "Feel free to ch​ange your prescription."}
+{"id": "v-di-09", "label": "violation", "rule_id": "dosing.imperative", "crisis_context": false, "text": "Just take more on rough days."}
+{"id": "v-dx-01", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "Your sleep logs suggest you probably have insomnia."}
+{"id": "v-dx-02", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "You might have sleep apnea based on those wake-ups."}
+{"id": "v-dx-03", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "This sounds like a symptom of depression."}
+{"id": "v-dx-04", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "That could be a sign of a thyroid problem."}
+{"id": "v-dx-05", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "YOU ARE PREDIABETIC, SO LET'S BE CAREFUL."}
+{"id": "v-dx-06", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "You may have an iron defi​ciency."}
+{"id": "v-dx-07", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "Based on your logs, you are аnemic."}
+{"id": "v-dx-08", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "Our dia​gnosis from your logs: low energy."}
+{"id": "v-dx-09", "label": "violation", "rule_id": "diagnosis.claim", "crisis_context": false, "text": "It looks like signs of burnout."}
+{"id": "v-tx-01", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "This evening routine will fix your sleep."}
+{"id": "v-tx-02", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "Magnesium can heal your gut."}
+{"id": "v-tx-03", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "Morning light is a remedy for low energy."}
+{"id": "v-tx-04", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "Walking after dinner cures bloating."}
+{"id": "v-tx-05", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "THIS STRETCH TREATS BACK PAIN."}
+{"id": "v-tx-06", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "Hydration is a therapy for headaches."}
+{"id": "v-tx-07", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "A steady routine could hеal your energy."}
+{"id": "v-tx-08", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "Use this plan to fi​x your mornings."}
+{"id": "v-tx-09", "label": "violation", "rule_id": "treatment.claim", "crisis_context": false, "text": "Consistency reverses the slump."}
+{"id": "v-rx-01", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Did you log your metformin today?"}
+{"id": "v-rx-02", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Nice job remembering your OZEMPIC shot this week."}
+{"id": "v-rx-03", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Your sertraline reminder is set for 8pm."}
+{"id": "v-rx-04", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Keep your statins next to your toothbrush."}
+{"id": "v-rx-05", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Logged: levo​thyroxine at 7am."}
+{"id": "v-rx-06", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Your wаrfarin check-in is ready."}
+{"id": "v-rx-07", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Time for your insulin check-in."}
+{"id": "v-rx-08", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Questions about antibiotics go to your care team."}
+{"id": "v-rx-09", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Your ｍｏｕｎｊａｒｏ reminder fired."}
+{"id": "v-rx-10", "label": "violation", "rule_id": "substance.rx_named", "crisis_context": false, "text": "Your semaglυtide refill is due Friday."}
+{"id": "v-bl-01", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "This habit could improve your mornings."}
+{"id": "v-bl-02", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "Treat yourself tonight — you earned it."}
+{"id": "v-bl-03", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "Small steps prevent missed days."}
+{"id": "v-bl-04", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "Your streak is clinically meaningful."}
+{"id": "v-bl-05", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "THE EFFICACY OF REMINDERS IS HIGH."}
+{"id": "v-bl-06", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "Let's re​verse the slide this week."}
+{"id": "v-bl-07", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "Nice іmprovement this week!"}
+{"id": "v-bl-08", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "A cure-all routine for busy people."}
+{"id": "v-bl-09", "label": "violation", "rule_id": "lhm.banned_lexicon", "crisis_context": false, "text": "Prevention starts with a plan."}
+{"id": "v-id-01", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "Take 500 mg tonight with dinner."}
+{"id": "v-id-02", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "Start 200mg tomorrow morning."}
+{"id": "v-id-03", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "TAKE 2 G AFTER MEALS."}
+{"id": "v-id-04", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "Stop the 50 mcg once you wake up."}
+{"id": "v-id-05", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "Keep taking 1000 IU daily."}
+{"id": "v-id-06", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "Ta​ke 5 ml before bed."}
+{"id": "v-id-07", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "Tаke 400 mg with breakfast."}
+{"id": "v-id-08", "label": "violation", "rule_id": "lhm.imperative_dose", "crisis_context": false, "text": "You should start with 300 mg at night."}
+{"id": "v-cr-01", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": "I hear you. You're not alone in this."}
+{"id": "v-cr-02", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": "That sounds really heavy. I'm here with you."}
+{"id": "v-cr-03", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": "Let's breathe slowly together for a moment."}
+{"id": "v-cr-04", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": "Thank you for telling me. Can you share more about what's going on?"}
+{"id": "v-cr-05", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": "It makes sense to feel overwhelmed right now."}
+{"id": "v-cr-06", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": "You matter, and this feeling can pass."}
+{"id": "v-cr-07", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": "Would it help to reach out to someone you trust tonight?"}
+{"id": "v-cr-08", "label": "violation", "rule_id": "crisis.missing_handoff", "crisis_context": true, "text": ""}
+{"id": "c-001", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Nice work logging three days in a row — want to keep the streak going?"}
+{"id": "c-002", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "What got in the way yesterday? We can plan around it together."}
+{"id": "c-003", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would a reminder at 8pm fit your evening better?"}
+{"id": "c-004", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your clinician is the right person for questions about your protocol."}
+{"id": "c-005", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "It's okay to miss a day. Want to pick it back up tomorrow morning?"}
+{"id": "c-006", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Try setting your evening reminder 15 minutes earlier tonight."}
+{"id": "c-007", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Five days logged this week. That's your longest run so far!"}
+{"id": "c-008", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want me to move your morning reminder to 7:30am?"}
+{"id": "c-009", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Mornings look busy for you lately. Would a lunchtime nudge work better?"}
+{"id": "c-010", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You checked in every day this week. Love to see it."}
+{"id": "c-011", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "How did last night go? A quick thumbs up or down is plenty."}
+{"id": "c-012", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Travel days can be tricky. Want a reminder that follows your time zone?"}
+{"id": "c-013", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Keeping everything by your coffee maker might make the morning routine easier."}
+{"id": "c-014", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "A missed day doesn't erase your progress. You've logged 12 of the last 14 days."}
+{"id": "c-015", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your care team can help with any questions about how your routine is set up."}
+{"id": "c-016", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would it help to pair your evening check-in with brushing your teeth?"}
+{"id": "c-017", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You've hit a two-week streak. Nicely done!"}
+{"id": "c-018", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want a gentle nudge at 9pm if you haven't checked in by then?"}
+{"id": "c-019", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Weekends seem harder to keep up. Want to try a later reminder on Saturdays?"}
+{"id": "c-020", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Quick check-in: how are you feeling about your routine this week?"}
+{"id": "c-021", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "That's ten days in a row. You're building real momentum."}
+{"id": "c-022", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "If the timing feels off, we can try a different slot together."}
+{"id": "c-023", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Running low? Want a reminder to reorder a few days ahead?"}
+{"id": "c-024", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your pharmacist is a great person to ask about refills and timing."}
+{"id": "c-025", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Nice! You logged everything before noon today."}
+{"id": "c-026", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "What's one thing that would make tomorrow morning smoother?"}
+{"id": "c-027", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You've been consistent for a full month. That's worth celebrating."}
+{"id": "c-028", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to snooze today's reminder for 30 minutes?"}
+{"id": "c-029", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Busy week ahead? We can lighten the check-ins until Friday."}
+{"id": "c-030", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "How about keeping a small travel case in your bag for days away?"}
+{"id": "c-031", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You missed two evenings this week. Anything we can plan around?"}
+{"id": "c-032", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Questions about your plan are best brought to your doctor at your next visit."}
+{"id": "c-033", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your reminder is now set for 6:45am on weekdays."}
+{"id": "c-034", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Great consistency this week: six out of seven days."}
+{"id": "c-035", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would a calendar invite help you remember your evening check-in?"}
+{"id": "c-036", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to set a backup reminder for 10pm in case the first one slips by?"}
+{"id": "c-037", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Late nights happen. Want to check in now and pick things up fresh tomorrow?"}
+{"id": "c-038", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You're halfway to your 30-day goal!"}
+{"id": "c-039", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Seven days straight. Want to aim for fourteen?"}
+{"id": "c-040", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Is your phone usually nearby at 8pm, or would a different time work better?"}
+{"id": "c-041", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Some people find it easier to keep things on the kitchen counter. Want to try that?"}
+{"id": "c-042", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You logged everything on time three days running. Nice rhythm."}
+{"id": "c-043", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want a weekly summary every Sunday evening?"}
+{"id": "c-044", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your next appointment is a good moment to bring up any questions with your care team."}
+{"id": "c-045", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "We noticed check-ins slip on workdays. Want a reminder when you get to the office?"}
+{"id": "c-046", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Thanks for checking in today. See you tomorrow!"}
+{"id": "c-047", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You're on a 21-day streak. That's a new personal record."}
+{"id": "c-048", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "What usually gets in the way on Mondays?"}
+{"id": "c-049", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would a reminder after dinner feel more natural than one at a fixed time?"}
+{"id": "c-050", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "It's fine to move your reminder schedule around whenever life gets busy."}
+{"id": "c-051", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to try checking in right after your morning walk?"}
+{"id": "c-052", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Two missed days is okay. What would help you get back on track?"}
+{"id": "c-053", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Nice job sticking with it through a hectic week."}
+{"id": "c-054", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would you like a quieter notification sound for late reminders?"}
+{"id": "c-055", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You've checked in before 9am every day this week."}
+{"id": "c-056", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "If cost is making refills hard, your pharmacist or care team may know of options."}
+{"id": "c-057", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Holiday plans coming up? Let's set reminders that fit your travel days."}
+{"id": "c-058", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Ready for today's check-in? It only needs about 20 seconds."}
+{"id": "c-059", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your evening routine looks steady. Keep it up!"}
+{"id": "c-060", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would texting a friend when you check in make it more fun?"}
+{"id": "c-061", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Let's set a reminder for 7pm on gym days and 8pm on rest days."}
+{"id": "c-062", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Feeling unsure about something in your plan? Jot it down for your next appointment."}
+{"id": "c-063", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Four weeks of check-ins. Be proud of that."}
+{"id": "c-064", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to turn on a reminder for the night before you travel?"}
+{"id": "c-065", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Mornings or evenings: which feels easier for your routine right now?"}
+{"id": "c-066", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "No check-in yet today. Want a nudge in an hour?"}
+{"id": "c-067", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Fifteen days in a row. Keep that streak alive!"}
+{"id": "c-068", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to keep your organizer next to your keys so it's easy to grab?"}
+{"id": "c-069", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You've logged on time every weekday this month."}
+{"id": "c-070", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Rough day? A short check-in still counts."}
+{"id": "c-071", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your reminder will repeat at 8:15pm if you haven't checked in."}
+{"id": "c-072", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Thinking about changing anything in your routine? Your clinician can talk it through with you."}
+{"id": "c-073", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You're 3 days away from a new record."}
+{"id": "c-074", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want me to pause reminders while you're on vacation?"}
+{"id": "c-075", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "That's a perfect week of check-ins!"}
+{"id": "c-076", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Sleeping in on Sundays? Let's push the reminder to 10am that day."}
+{"id": "c-077", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "What's been working well for you this week?"}
+{"id": "c-078", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "We can try a two-step reminder: one at 7:45pm and a follow-up at 8:30pm."}
+{"id": "c-079", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You got back on track after a missed day. That's the hard part."}
+{"id": "c-080", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to log a note about what made today easier?"}
+{"id": "c-081", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You've hit 50 check-ins total. Nice milestone!"}
+{"id": "c-082", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would a reminder on your watch be easier to notice than one on your phone?"}
+{"id": "c-083", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "If side effects or questions come up, reach out to your care team."}
+{"id": "c-084", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Long shifts this week? Want a reminder timed to your break?"}
+{"id": "c-085", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your streak paused yesterday, but today is a fresh day."}
+{"id": "c-086", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want a quick recap of this week's check-ins?"}
+{"id": "c-087", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "A glass of water by the bed might help you remember the evening check-in."}
+{"id": "c-088", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You've checked in at roughly the same time for eight days. Great rhythm."}
+{"id": "c-089", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would it help to set the reminder for when you usually get home?"}
+{"id": "c-090", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Thanks for being honest about the missed days. Let's figure out a plan that fits."}
+{"id": "c-091", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Twelve days and counting!"}
+{"id": "c-092", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to share your streak with your accountability buddy?"}
+{"id": "c-093", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Questions about timing or refills? Your pharmacist can walk you through it."}
+{"id": "c-094", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "We'll check in again tomorrow at 8am."}
+{"id": "c-095", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "What would make the weekend routine feel lighter?"}
+{"id": "c-096", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You logged every day during your trip. Impressive!"}
+{"id": "c-097", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to try a reminder 10 minutes after your alarm?"}
+{"id": "c-098", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Evenings seem packed lately. Want to move your check-in to lunchtime?"}
+{"id": "c-099", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your check-in history shows steady consistency over the past two months."}
+{"id": "c-100", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Nice catch logging that late entry."}
+{"id": "c-101", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Would a sticky note on the fridge help as a backup reminder?"}
+{"id": "c-102", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Remember to bring your list of questions to your appointment on Thursday."}
+{"id": "c-103", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Thirty days in a row. That's a whole month of consistency!"}
+{"id": "c-104", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Not sure what to ask at your next visit? We can draft a short list together."}
+{"id": "c-105", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You checked in even on a busy travel day. Well done."}
+{"id": "c-106", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to set a reminder for refill pickup on Friday afternoon?"}
+{"id": "c-107", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Seems like 9pm works better than 8pm for you. Want to make that the default?"}
+{"id": "c-108", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Let's keep it simple: one reminder, one tap, done."}
+{"id": "c-109", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your doctor or pharmacist can answer questions about anything on your list."}
+{"id": "c-110", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "How's the new evening routine feeling after a week?"}
+{"id": "c-111", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You've logged 2 glasses of water with every check-in this week."}
+{"id": "c-112", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Nice — you checked in within 5 minutes of your reminder all week."}
+{"id": "c-113", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to switch to a weekly planner view?"}
+{"id": "c-114", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "A missed check-in is just information. What happened yesterday?"}
+{"id": "c-115", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to try a morning and an evening check-in for the next few days?"}
+{"id": "c-116", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "You're doing the work, one day at a time."}
+{"id": "c-117", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your reminders are paused until Monday. Enjoy the break!"}
+{"id": "c-118", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Did your evening dose get logged? A quick tap here confirms it."}
+{"id": "c-119", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Your morning dose reminder is set for 7am."}
+{"id": "c-120", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Let's celebrate: 100 days of check-ins!"}
+{"id": "c-121", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Want to set a quiet reminder for 6pm on long workdays?"}
+{"id": "c-122", "label": "compliant", "rule_id": null, "crisis_context": false, "text": "Nice job staying on schedule while your routine was shaken up."}
+{"id": "c-123", "label": "compliant", "rule_id": null, "crisis_context": true, "text": "I'm really glad you told me. Please call or text 988 right now to talk with someone."}
+{"id": "c-124", "label": "compliant", "rule_id": null, "crisis_context": true, "text": "You don't have to handle this alone. The Crisis Text Line is available any time."}
+{"id": "c-125", "label": "compliant", "rule_id": null, "crisis_context": true, "text": "If you might be in danger, please call 911 or go to the nearest emergency room."}
+{"id": "c-126", "label": "compliant", "rule_id": null, "crisis_context": true, "text": "Please reach out to emergency services if you feel unsafe right now."}
+{"id": "c-127", "label": "compliant", "rule_id": null, "crisis_context": true, "text": "A crisis line can connect you with someone tonight. In the US, dial 988."}
+{"id": "c-128", "label": "compliant", "rule_id": null, "crisis_context": true, "text": "If you're outside the US, please call your local emergency number."}
