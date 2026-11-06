@@ -2,6 +2,9 @@
 
 Workstream: daypart (FHDIC lane). Issue: HAC-33. Source: PVR rev 2 on HAC-30 (`pvr`, R1–R11, A1–A9).
 Baseline: `daypart/build` @ 0564ef6. Author: Worktree Agent, `/design` in autonomous mode.
+Review: one independent design review (9 findings, all applied: ontology version name, existing
+codes, single container, inspect route, non-null thread links, flag re-run, run IDs from
+`pipeline.tag`, LOINC verification and notice, crisis pre-check).
 The only human gate is the blueprint review (section 0). The CTO briefs it.
 
 This A&D covers the PVR rev 2 delta only. The 2026-10-31 Daypart A&D and its invariants I1–I9
@@ -133,7 +136,9 @@ blueprint review.
 - D-A5. **The LOINC version is taken from the LOINC release the codes are checked against at build
   time.** It is recorded in one constant and in the registry file. Each A4 candidate code
   (section 4.3) is verified against that release during the build. A code that fails verification
-  is dropped to "unmapped" and is never replaced by a guess.
+  is dropped to "unmapped" and is never replaced by a guess. The verified rows are committed as
+  `memory/loinc_verify_v1.csv`, and a unit test (T5.6) pins the registry to it. LOINC is used under
+  its licence, and the copyright notice goes in ATTRIBUTION, the UI footer and the submission pack.
 - D-A6. **Evidence registry entries are agent-curated public sources**, marked
   `vetting: "agent draft, not clinically reviewed"` (A3: no clinician). The copy never says
   "vetted sources" while A3 holds. The phrase "Your real input, evaluation from vetted sources" is
@@ -142,6 +147,11 @@ blueprint review.
   address, a phone number, a national-ID-like number, "my name is", a date of birth) is refused
   whole, and nothing is stored. This is defence in depth for a public demo. It is not a privacy
   control and is never claimed as one.
+- D-A9. **Recorded values bypass the I6 score gate.** I6 ("no number unless ready") governs
+  *computed* scores. A value the person just confirmed is shown back exactly as recorded, with its
+  unit, date and source, and never as a score (§4.4). If the board reads I6 as covering recorded
+  values too, observation cards switch to "withheld" until the LHM readiness rule is extended, at
+  the cost of fewer numbers in the demo.
 - D-A8. **Deployment check.** `deploy-demo` is a *job* in `.github/workflows/engine.yml` (HAC-24
   moved it there), not a separate `deploy-demo.yml`. The CTO baseline table names the file; the job
   is the real one, and the new a11y job is added beside it.
@@ -151,7 +161,7 @@ blueprint review.
 | # | Decision | Options considered | Chosen | By |
 |---|---|---|---|---|
 | AD1 | Where pending check-ins live | (a) write to memory with `status=pending` and filter on read; (b) a separate pending store, writing to `EventLog` only on confirm; (c) client-side only until save | **(b)**: memory never holds unconfirmed data, so R4 "nothing written before confirmation" holds structurally and `MemoryLhm` stays unchanged. (a) risks a filter miss leaking pending values into scores. (c) moves validation to the browser. | Agent · delegated (CTO: "nothing is written before confirmation") |
-| AD2 | Observation metadata (unit, LOINC version, reviewer status, allowed use) | (a) add fields to `ontology.Node`; (b) a sidecar `ConceptRegistry` keyed by node code, with nodes added through `apply_update` → `core-v2` | **(b)**: `core-v1` and its digest stay frozen (I9). Growth goes through the gated, append-only `apply_update`, and the shared write path is unchanged. | Agent · assumed |
+| AD2 | Observation metadata (unit, LOINC version, reviewer status, allowed use) | (a) add fields to `ontology.Node`; (b) a sidecar `ConceptRegistry` keyed by node code, with nodes added through `apply_update` → `core-v1+u1` | **(b)**: `core-v1` and its digest stay frozen (I9). Growth goes through the gated, append-only `apply_update`, and the shared write path is unchanged. | Agent · assumed |
 | AD3 | Extraction engine | (a) LLM at runtime (Fireworks/Muse); (b) deterministic rules plus pre-recorded fixture extraction; (c) client-side parsing | **(b)**: secret-free hosting, reproducible tests, no spend, and the method is honest because it is labelled. (a) adds keys to a public demo and nondeterminism. | Agent · assumed (D-A2) |
 | AD4 | Multi-visitor state | shared cohort members vs per-visitor journals | **per-visitor journals** (D-A3) | Agent · assumed |
 | AD5 | Learning lab host | Streamlit vs FastAPI page | **FastAPI page** (D-A4) | Agent · assumed |
@@ -169,12 +179,12 @@ New code lives under `engine/daypart/`. Existing modules are extended, never for
 
 | Unit | Path | Does | Used by | Depends on |
 |---|---|---|---|---|
-| Concept registry | `memory/registry.py` + `memory/registry_core_v2.json` | The A4 slice: one `Concept` per observable (§4.3). `core_v2()` = `apply_update(core(), …)` adding the new LOINC nodes. | extractor, journal, passport | `ontology` |
+| Concept registry | `memory/registry.py` + `memory/registry_a4.json` + `memory/loinc_verify_v1.csv` | The A4 slice: one `Concept` per observable (§4.3). `slice_ontology()` = `apply_update(core(), …)` adding only the 12 LOINC nodes not already in `core()`; version `core-v1+u1` (the name `apply_update` assigns). | extractor, journal, passport | `ontology` |
 | Governance gate | `governance/real_input.py` + `governance/real_input.yaml` | Checklist load, `status()`, `request_enable()` → always `Refused` | app (mode endpoint, startup), UI | — |
 | PII tripwire | `checkin/tripwire.py` | `scan(text) -> list[str]` (reason codes) | check-in service | — |
 | Text extractor | `checkin/extract_text.py` | `extract(text, today) -> list[Proposal]` | check-in service | registry |
 | Fixture intake | `checkin/fixtures.py` + `demo/fixtures/*` | allow-list by sha256, size and type checks, sidecar extraction | check-in service | registry |
-| Check-in service | `checkin/service.py` | `create_checkin`, `review` (all-or-nothing), state machine | app | journal, extractors, tripwire, gate |
+| Check-in service | `checkin/service.py` | `create_checkin` (gate → crisis check → PII tripwire → extract), `review` (all-or-nothing), state machine | app | journal, extractors, tripwire, crisis, gate |
 | Journal | `checkin/journal.py` | Per-visitor clone: member profile ref, `EventLog`, `ProvenanceStore`, `MemoryLhm`, synthetic clock | service, passport view, next step | `memory.events`, `memory.lhm`, `simmember` |
 | Evidence registry | `evidence/registry.py` + `evidence/sources_v1.json` | `Source` entries, `for_concept(code)` | passport view | — |
 | Passport view | `passport/view.py` | `health_clone_passport(journal, as_of) -> HealthClonePassport` (observation cards + existing LHM flags + inventory) | app | `passport.render`, registry, evidence, journal |
@@ -194,6 +204,7 @@ New code lives under `engine/daypart/`. Existing modules are extended, never for
 | `POST /api/journals` | `{"member_id": "syn-NNN"}` | `201 {"journal_id", "member_id", "today"}` | 404 unknown or curated member |
 | `POST /api/checkins` | `{"journal_id", "text"?: ≤500 chars, "fixture_id"?}`, or multipart `file` + `journal_id` | `201 {"checkin_id","status":"pending_review","proposals":[Proposal]}` | 404 journal; 413 `too_large`; 415 `unsupported_type`; 422 `not_a_demo_fixture` / `looks_like_personal_data` (reasons listed) / `empty_checkin` / `nothing_extracted` |
 | `POST /api/checkins/{id}/review` | `{"decisions":[{"proposal_id","action":"confirm\|correct\|discard\|save_unmapped","value"?,"unit"?,"date"?}]}` | `200 {"status":"saved","written":[event_id],"discarded":[proposal_id]}` | 404; 409 `already_saved`; 422 `unresolved_flags` (per proposal) / `missing_decision` / `invalid_correction` |
+| `GET /api/journals/{id}/observations/{record_id}` | — | `200 ObservationRecord` (mapped or unmapped) | 404 unknown journal or record |
 | `GET /api/journals/{id}/passport` | `?day=` | `200 HealthClonePassport` | 404 |
 | `GET /api/journals/{id}/next-step` | — | `200 NextStep` | 404; 409 `no_saved_checkin` |
 | `POST /api/journals/{id}/next-step` | `{"step_id","choice":"choose\|defer\|ask_professional"}` | `200 {"recorded": event_id \| null}` | 404, 422 |
@@ -222,7 +233,7 @@ Proposal (frozen pydantic)
   snippet: str                # ≤80 chars of the matched span (synthetic input only)
   method: str                 # "rules-v1" | "fixture-sidecar-v1"
   confidence: "high" | "medium" | "low"
-  flags: tuple[Flag, ...]     # Flag ∈ {unit_mismatch, ambiguous_date, contradiction,
+  flags: tuple[Flag, ...]     # Flag ∈ {unit_mismatch, unit_assumed, ambiguous_date, contradiction,
                               #          unknown_code, out_of_plausible_range, missing_value}
   blocking: bool              # any flag present ⇒ True
 
@@ -233,9 +244,13 @@ CheckIn
 ```
 
 Confidence rules (`rules-v1`): **high** = concept keyword, number and a unit allowed for the concept
-all present. **medium** = keyword and number, with the unit taken from the concept default (shown
-as "unit assumed"). **low** = anything else that still produced a proposal. Every flag is
-blocking; there are no "soft" flags.
+all present. **medium** = keyword and number, with the unit taken from the concept default; it
+carries the blocking flag `unit_assumed`, so an assumed unit can never be confirmed silently. **low** = anything else that still produced a proposal. Every flag is
+blocking; there are no "soft" flags. `review()` applies all `correct` edits first, then **re-runs
+flag detection over the whole post-correction set** (contradiction is a set property). A
+correction clears a flag only if the re-run no longer raises it, so correcting one side of a
+contradiction clears both when they no longer conflict. `unit_assumed` clears when `correct`
+states a unit explicitly.
 
 ### 4.2 Journal (per visitor, `checkin/journal.py`)
 
@@ -243,17 +258,18 @@ blocking; there are no "soft" flags.
 Journal
   journal_id: uuid4 hex
   member: Profile                  # a training-cohort syn- member (curated ids never resolvable, I1)
-  ontology: core_v2()
-  events: EventLog(core_v2())      # the existing append-only log = the shared write path
+  ontology: slice_ontology()          # version "core-v1+u1"
+  events: EventLog(slice_ontology())      # the existing append-only log = the shared write path
   memory: MemoryLhm(SimMemberLhmAdapter(cohort), ontology=…, events=events)
-  provenance: dict[event_id, ObservationRecord]
+  provenance: dict[record_id, ObservationRecord]
   checkins: OrderedDict[checkin_id, CheckIn]
   today: date                      # START_DATE + 28 by default (enough history for readiness)
   last_seen: datetime
 ```
 
-`ObservationRecord` (the R5 inspect view) is
-`{event_id, concept_id, loinc_code|None, loinc_version|None, display, value, unit, value_type,
+`ObservationRecord` (the R5 inspect view; key `record_id = "obs-<n>"`, one per saved value, mapped or
+unmapped) is
+`{record_id, event_id|None (None iff unmapped), concept_id, loinc_code|None, loinc_version|None, display, value, unit, value_type,
 observed_at, provenance:{source_kind, source_ref, checkin_id, method}, quality:"confirmed"|"corrected",
 status:"mapped"|"unmapped", reviewer_status:"draft, not clinically reviewed", allowed_use}`.
 
@@ -268,7 +284,7 @@ status:"mapped"|"unmapped", reviewer_status:"draft, not clinically reviewed", al
 - J5. The base cohort series (simulated) stays read-only. Journal events add to it, and cards say
   which kind each value is.
 
-### 4.3 Concept registry (A4 slice, `registry_core_v2.json`)
+### 4.3 Concept registry (A4 slice, `registry_a4.json`)
 
 ```text
 Concept
@@ -286,7 +302,10 @@ Concept
   allowed_use: "demo display of self-reported or simulated values; no interpretation"
 ```
 
-Candidate slice (19 LOINC + 2 local). Each LOINC code is verified at build (D-A5):
+Candidate slice (19 LOINC + 2 local). Seven are already in `core()` (72514-3, 44261-6, 70274-6, 8867-4,
+29463-7, 55423-8, 93832-4) and only get registry metadata; the other 12 are `add_nodes` in the one
+`OntologyUpdate`. Each LOINC code is verified at build (D-A5) against `loinc_verify_v1.csv`
+(code, long common name, LOINC version, copied from the LOINC release by the builder):
 
 | Vertical | Codes |
 |---|---|
@@ -303,7 +322,7 @@ labs, conditions, medications, care history and preventive care.
 ```text
 HealthClonePassport
   display_name: "Health Clone Passport"
-  journal_id, member_id, as_of, ontology_version ("core-v2"), loinc_version, guard_versions
+  journal_id, member_id, as_of, ontology_version ("core-v1+u1"), loinc_version, guard_versions
   mode: "demo"
   cards: tuple[Card, ...]
   inventory: {verticals, gaps}
@@ -321,17 +340,24 @@ Card
   thread: EvidenceThread
 ```
 
-Readiness: an **observation** card is `ready` iff at least one confirmed, mapped observation of the
-concept exists within 14 days of `as_of`. Otherwise it is withheld with "Not enough data yet."
-(existing `WITHHELD_MESSAGE`). A **pattern** card is today's `Flag`, with readiness from `is_ready`
-(I6) unchanged.
+Readiness has two paths, and this is a deliberate extension of I6 (D-A9):
+- A **pattern** card is today's `Flag`: a computed LHM domain score, with readiness from `is_ready`
+  plus the claim and valence gates (I6) unchanged. No new code touches this path.
+- An **observation** card shows a *recorded* value, never a computed one: the latest confirmed,
+  mapped value the person entered in this journal (`origin="observed"`), or the latest point of
+  the simulated cohort series for that concept (`origin="simulated"`). It is labelled "You
+  recorded" or "Simulated record". It carries no score, interval, trend, comparison or
+  interpretation. It is `ready` iff such a value exists within 14 days of `as_of`; otherwise it is
+  withheld with "Not enough data yet." (the existing `WITHHELD_MESSAGE`). LOINC nodes still have
+  `lhm_domain=None`, so `_node_state` never marks them ready, and no observation value feeds a
+  pattern score (G3 unchanged).
 
 ### 4.5 Evidence thread
 
 ```text
 EvidenceThread.steps (always exactly 5, in order):
   source       → {label, ref, link}   link: "#review/<checkin_id>" | "/api/fixtures/<id>" | "#research" (simulated cohort, seed)
-  observation  → {event_id | "simulated series", concept_id, link: "/api/journals/<j>/observations/<event_id>"}
+  observation  → {event_id | "simulated series", concept_id, link: "/api/journals/<j>/observations/<record_id>"}
   memory       → {ontology_version, readiness: ready|not_ready, link: "#passport/inventory"}
   explanation  → {template_id, evidence_ids[], status: shown|suppressed, link: source URLs}
   evaluation   → {membrane_verdict, rule_version, run_id (boundary eval), link: "#lab/<run_id>"}
@@ -340,8 +366,9 @@ EvidenceThread.steps (always exactly 5, in order):
 Suppression rule: an explanation is shown iff (1) at least one evidence source applies to the
 concept, (2) the template text passes `safe_text` **and** `dsl.check` with no violations, and
 (3) the card is ready. Otherwise `explanation=null`, `explanation_status="suppressed"`, and the UI
-shows "Not enough evidence". A step with nothing behind it still renders, with
-`link=null, label="none"`; it is never omitted.
+shows "Not enough evidence". A step with nothing behind it still renders, with `label="none"` and
+`link="#passport/why-empty/<step>"`, an in-page note saying why the step is empty (e.g. "no
+evidence source covers this measure yet"). It is never omitted, and `link` is never null.
 
 ### 4.6 Evidence registry (`evidence/sources_v1.json`)
 
@@ -379,9 +406,9 @@ field exists.
 
 | Row | run_id | split | seed | failures | metric shown |
 |---|---|---|---|---|---|
-| base | `beval-` + sha256(boundary_eval.json)[:12] | `prompt_set_version` (boundary-heldout-v1), n=`models.base.n` | `meta.seed` | `n − round(boundary_pass_rate·n)` boundary failures; `degenerate` separately | boundary + rubric pass rate |
-| sft | basename(`meta.adapters.sft`) (= `daypart-sft-7cdcffc336f1`), cross-checked with `training.json sft.adapter` | same + training rows `training.sft.rows`, data sha `pipeline.data.sft_sha256` | `meta.seed`, `meta.cohort_seed` | as base | as base + r3 |
-| dpo | basename(`meta.adapters.dpo`), cross-checked | same + `training.dpo.rows`, `pipeline.data.dpo_sha256` | as sft | as base | as base + r4 |
+| base | `pipeline.tag` + `/base` (`hac28-20261105T081951Z/base`); sha256(boundary_eval.json)[:12] shown only as a file digest | `prompt_set_version` (boundary-heldout-v1), n=`models.base.n` | `meta.seed` | `n − round(boundary_pass_rate·n)` boundary failures; `degenerate` separately | boundary + rubric pass rate |
+| sft | `pipeline.tag` + `/` + basename(`meta.adapters.sft`) (`…/daypart-sft-7cdcffc336f1`), adapter cross-checked with `training.json sft.adapter` | same + training rows `training.sft.rows`, data sha `pipeline.data.sft_sha256` | `meta.seed`, `meta.cohort_seed` | as base | as base + r3 |
+| dpo | `pipeline.tag` + `/` + basename(`meta.adapters.dpo`), cross-checked | same + `training.dpo.rows`, `pipeline.data.dpo_sha256` | as sft | as base | as base + r4 |
 | env baselines (3) | `eval-v1@` + `runs_digest[:12]` + `/` + arm name | `n_scenarios × seeds`, horizon | `seeds` | `round(episode_violation_rate · n_scenarios · len(seeds))` episodes with a DSL violation | mean adherence, violation rate |
 | grpo | — | — | — | — | "proposed, not built" + `reason` from metrics.json; no number |
 
@@ -435,6 +462,7 @@ repo or an `ASSUMPTION` tag, and `outcomes.md` equals the regenerated table byte
 
 | Case | Behaviour | Status / UI |
 |---|---|---|
+| Free text contains crisis language (the membrane's crisis lexicon, `checkin/crisis.py` reusing the `boundary-v1` crisis vocabulary), checked **before** extraction | nothing extracted or stored; respond with the fixed `clinician_handoff` text and a pointer to local emergency services | 200 `{"status":"handoff","text":…}`; the UI shows it in place of review |
 | Free text matches the PII tripwire | refuse the whole check-in; nothing extracted or stored | 422 `looks_like_personal_data`, with the reasons and the "don't enter real data" warning |
 | Empty or whitespace text and no fixture | refuse | 422 `empty_checkin` |
 | Text yields no proposal | refuse, offering "try e.g. 'slept 7 hours'" | 422 `nothing_extracted`; no CheckIn created |
@@ -455,7 +483,10 @@ repo or an `ASSUMPTION` tag, and `outcomes.md` equals the regenerated table byte
 | Any card fails gating | withheld, no number (fail closed, as `render._flag`) | — |
 | Review write fails midway | the service collects all events first, then appends; `EventLog.append` validation errors are pre-checked by validating every event before the first append, so there is no partial write | 500 means nothing was written |
 
-Concurrency: the API is async in a single process (Modal `max_inputs=50`). Every journal mutation
+Concurrency: journals are in memory, so the playground must run as **one container**:
+`modal_demo.py` sets `max_containers=1` on `playground` (with `@modal.concurrent(max_inputs=50)`
+unchanged). A unit test asserts the decorator setting (T4.6). If load ever needs more containers,
+journals move to a `modal.Dict`; that is out of scope here. The API is async in that one process. Every journal mutation
 runs under a per-journal `asyncio.Lock`, so two concurrent reviews of one check-in yield exactly
 one 200 and one 409.
 
@@ -473,6 +504,8 @@ Tests marked **[sealed]** are the Test Author's contract and are written from th
 - T1.2 [ui] on each of the 5 routes, the visible text contains "Demo mode: synthetic inputs and
   simulated results" and does not contain "Your real input, evaluation from vetted sources".
 - T1.3 [sealed] no JSON response from the new endpoints contains the real-input phrase.
+- T1.5 [sealed] `/openapi.json` `info.title` == "Clinical Human Clone API" (the FastAPI `title` is
+  renamed; the description says synthetic only, not medical advice).
 - T1.4 the Streamlit dashboard page title and headers say "Clinical Human Clone: research view"
   (unit test on the strings).
 
@@ -484,6 +517,8 @@ Tests marked **[sealed]** are the Test Author's contract and are written from th
   is unchanged and `GET passport` has no observed card for either concept.
 - T2.3 [sealed] text with an e-mail or phone number → 422 `looks_like_personal_data`, and no
   CheckIn exists.
+- T2.4 [sealed] text with crisis language (a row from the sealed boundary corpus's crisis kind) →
+  200 `status="handoff"` with the clinician-handoff text, no CheckIn and no events.
 
 **R3: file and image check-in**
 - T3.1 [sealed] each bundled `fixture_id` (≥1 image, ≥1 CSV or JSON) → 201 with proposals whose
@@ -501,14 +536,21 @@ Tests marked **[sealed]** are the Test Author's contract and are written from th
 - T4.3 [sealed] discard → the value is absent from `EventLog`, provenance and the passport.
 - T4.4 [sealed] confirm 1 of 2 → exactly 1 SignalEvent written; a second review → 409.
 - T4.5 [sealed] concurrent double review → one 200, one 409, one write.
+- T4.6 [unit] `engine/deploy/modal_demo.py` `playground` has `max_containers=1`.
 
 **R5: registry**
-- T5.1 [sealed] `core_v2()` = `apply_update(core(), …)`; `core()` is unchanged (equal digest);
-  `core_v2().version == "core-v2"`; the history has 1 record.
+- T5.1 [sealed] `slice_ontology()` = `apply_update(core(), …)`; `core()` is unchanged (equal digest);
+  `slice_ontology().version == "core-v1+u1"`; the history has 1 record; the update's `add_nodes` are
+  exactly the 12 codes not in `core()`.
+- T5.6 [unit] every LOINC concept's code, display and `loinc_version` equal a row of
+  `loinc_verify_v1.csv`. `ATTRIBUTION.md`, the UI footer and `submission/README.md` carry the LOINC
+  copyright notice and licence link.
 - T5.2 [sealed] every A4 concept has all of: concept_id, code, loinc_version (non-null for LOINC),
   display, unit, value_type, reviewer_status == "draft, not clinically reviewed", allowed_use.
   The 3 verticals have ≥4 concepts each, and the LOINC count is between 15 and 25.
-- T5.3 [sealed] the observation inspect endpoint returns every R5 field for a confirmed value.
+- T5.3 [sealed] `GET /api/journals/{j}/observations/{record_id}` returns every R5 field for a
+  confirmed value and for a `save_unmapped` value (that one has `status="unmapped"`,
+  `loinc_code=null`, `event_id=null`).
 - T5.4 [sealed] `/api/inventory` gaps ⊇ {labs, conditions, medications, care history,
   preventive care}.
 - T5.5 [unit] the `plausible` bounds never appear in any API response body (string search over
@@ -517,11 +559,15 @@ Tests marked **[sealed]** are the Test Author's contract and are written from th
 **R6: passport + evidence thread**
 - T6.1 [sealed] every card has origin, data_age_days (null only when withheld), source, method and
   ≥1 limit.
-- T6.2 [sealed] every card's thread has exactly 5 steps in order, each with label and link keys.
+- T6.2 [sealed] every card's thread has exactly 5 steps in order, each with a non-empty label and a
+  non-null link; an empty step's link starts with `#passport/why-empty/`.
 - T6.3 [sealed] a concept with no evidence source → `explanation=null`, status `suppressed`; the
   UI text is "Not enough evidence".
 - T6.4 [sealed] a withheld card has `value=null`, `unit=null`; existing I6 sealed tests stay
   green.
+- T6.6 [sealed] an observation card's `value` equals the last confirmed (or simulated) recorded
+  value byte for byte, with no interval or score field; a concept whose latest value is older
+  than 14 days → withheld; a pattern card for a node that `is_ready` rejects → withheld.
 - T6.5 [sealed] the serialized passport passes `assert_narration_safe` on every string, and
   `dsl.check` finds no diagnosis, treatment or dosing hits; no `plausible`/range numbers appear.
 
@@ -574,7 +620,7 @@ Branch per phase off `daypart/build`. Each task: files → failing test → mini
 verify → commit. The Test Author seals R-tests per phase from this A&D.
 
 - **P1 Data core (R5, R9, the R2–R4 backend), ≈4 days.**
-  1. `memory/registry.py` + JSON, `core_v2()`; verify the LOINC codes and version (T5.1, T5.2, T5.5).
+  1. `memory/registry.py` + JSON, `slice_ontology()`, `loinc_verify_v1.csv`, LOINC notice (T5.1, T5.2, T5.5, T5.6).
   2. `governance/real_input.py` + YAML + doc + `/api/mode` (T9.1–T9.3, T9.5).
   3. `checkin/models.py`, `tripwire.py`, `extract_text.py` (rules-v1) (T2.2, T2.3, T4.1, T4.2 text cases).
   4. `checkin/fixtures.py` + 4 synthetic fixtures + sidecars (T3.1, T3.2).
@@ -606,7 +652,8 @@ Critical path: P1 → P2 → P3 tasks 11 and 12. UIUX task 10 runs in parallel w
 2. PVR open question 3 (the organiser cutoff and rules) is a CTO check. It feeds
    `organiser-rules.md` only.
 3. PVR open question 4 (R9 owners) stays "unassigned" at ship by design.
-4. D-A1 to D-A8 are agent assumptions for the blueprint review. The highest-impact ones are D-A2
+4. D-A1 to D-A9 are agent assumptions for the blueprint review. The highest-impact ones are D-A9
+   (recorded values shown outside the I6 score gate), D-A2
    (no live model extraction) and D-A3 (per-visitor in-memory journals).
 5. The PVR constraint "private until ready to submit" is superseded by the CTO note that the repo
    is now public. The design assumes public: no real data, no keys, fixtures synthetic, and the
