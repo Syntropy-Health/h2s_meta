@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "workstream": "daypart",
+  "updated_at": "2026-11-07T00:37:25.439843+00:00",
+  "linear": {
+    "initiative_url": "",
+    "initiative_id": ""
+  },
+  "paperclip": {
+    "parent": "",
+    "phases": {}
+  },
+  "github": {
+    "repo": ""
+  },
+  "phases": {
+    "P1.1": {
+      "status": "done",
+      "artifact": "",
+      "linear": "",
+      "paperclip": "",
+      "gh": "",
+      "commit": "29e0171",
+      "qgr": "workstreams/daypart/qgr/h2s_meta-unknown-worktree-agent-daypart-h2s_meta-qgr-iteration-complete-20261107-0037-92755c2.md",
+      "summary": "A4 concept registry, slice_ontology core-v1+u1, LOINC 2.83",
+      "pr": "",
+      "updated_at": "2026-11-07T00:37:25.439807+00:00"
+    }
+  }
+}
