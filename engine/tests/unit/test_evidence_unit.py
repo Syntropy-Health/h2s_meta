@@ -390,3 +390,28 @@ def test_f5_applies_to_an_unknown_concept_is_refused():
 def test_f6_forbidden_review_copy_is_refused(field, text):
     with pytest.raises(pydantic.ValidationError, match="copy may not say"):
         Source.model_validate(a_source(**{field: text}))
+
+
+# G22: the shipped sourced ranges, pinned by hand (a matching edit of both JSON files must still fail here).
+GOLDEN_RANGES = {
+    "chc:heart-rate": (60.0, 100.0, "/min", "ev:medlineplus-vital-signs"),
+    "chc:bp-systolic": (90.0, 120.0, "mm[Hg]", "ev:medlineplus-vital-signs"),
+    "chc:bp-diastolic": (60.0, 80.0, "mm[Hg]", "ev:medlineplus-vital-signs"),
+    "chc:respiratory-rate": (12.0, 18.0, "/min", "ev:medlineplus-vital-signs"),
+    "chc:body-temperature": (36.5, 37.3, "Cel", "ev:medlineplus-vital-signs"),
+    "chc:bmi": (18.5, 24.9, "kg/m2", "ev:nhlbi-bmi"),
+    "chc:sleep-duration": (7.0, 9.0, "h", "ev:nhlbi-how-much-sleep"),
+}
+
+
+def test_f9_shipped_ranges_are_exactly_the_golden_set():
+    got = {
+        c.concept_id: (c.reference_range.low, c.reference_range.high, c.reference_range.unit,
+                       c.reference_range.source_evidence_id)
+        for c in load_registry().concepts() if c.reference_range is not None
+    }
+    assert got == GOLDEN_RANGES
+    # sourced but range-free concepts stay null
+    for cid in ("chc:spo2", "chc:body-weight", "chc:body-height", "chc:steps", "chc:exercise-duration"):
+        c = load_registry().by_concept_id(cid)
+        assert c is not None and c.reference_range is None
