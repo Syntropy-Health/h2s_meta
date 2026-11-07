@@ -25,7 +25,7 @@ from daypart.checkin.models import Proposal
 class ExtractorOutputError(ValueError):
     """Extractor output that is not a sequence of valid, uniquely-identified proposals.
 
-    The message names the item index and failing field only, never an input value.
+    The message names the item index and failing schema field only, never an input key or value.
     """
 
 
@@ -39,7 +39,11 @@ def _check(i: int, item: object) -> Proposal:
     try:
         return Proposal.model_validate(data)
     except pydantic.ValidationError as e:
-        fields = sorted({".".join(str(p) for p in err["loc"]) or "<item>" for err in e.errors()})
+        # An extra key's name is input, so it is reported as "<extra field>", never echoed.
+        fields = sorted({
+            "<extra field>" if err["type"] == "extra_forbidden" else ".".join(str(p) for p in err["loc"]) or "<item>"
+            for err in e.errors()
+        })
         raise ExtractorOutputError(f"proposal {i}: invalid {', '.join(fields)}") from None
 
 
