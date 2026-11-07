@@ -343,3 +343,18 @@ def test_b1_low_must_come_before_high_in_the_statement():
 def test_f1_stated_range_branches(over, msg):
     with pytest.raises(pydantic.ValidationError, match=msg):
         StatedRange.model_validate({**HR_RANGE, **over})
+
+
+def _hr_source(eid="ev:test", **rng):
+    return Source.model_validate(a_source(evidence_id=eid, stated_ranges=[{**HR_RANGE, **rng}]))
+
+
+@pytest.mark.parametrize(
+    "rr_over",
+    [{"high": 101.0}, {"low": 61.0}, {"population": "children"}, {"low": None}, {"unit": "/s"}],
+)
+def test_f2_a_range_that_differs_from_its_stated_range_is_refused(rr_over):
+    rr = ReferenceRange.model_construct(**{"low": 60.0, "high": 100.0, "unit": "/min", "population": "adults",
+                                           "source_evidence_id": "ev:test", **rr_over})
+    with pytest.raises(ValueError, match="chc:heart-rate: reference_range is not stated by ev:test"):
+        check_reference_ranges(_registry_with(rr), EvidenceRegistry((_hr_source(),)))
