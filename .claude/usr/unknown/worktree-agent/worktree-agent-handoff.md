@@ -6,9 +6,14 @@ issue: HAC-38
 branch: daypart/hac-fhdic-build
 ---
 
-# Handoff — HAC-38 FHDIC build, after P1.6 (AM-1)
+# Handoff — HAC-38 FHDIC build, after P1.7 (pyright CI + typed extractor)
 
 ## State
+- P1.7 (CTO comment 859317b9) boundary a46f759, QGR `…iteration-complete-20261107-0231-a79c704.md`, pushed.
+  `typecheck` job: `uvx pyright@1.1.414 --pythonpath .venv/bin/python` from `engine/` (config `[tool.pyright]`),
+  gates deploy-demo; 0 errors. `checkin/extractor.py` validate_proposals + Extractor protocol
+  (`service.EXTRACTORS` binds both extractors). 500 `extractor_output_invalid`. Addendum G20, G21. Unit 2327,
+  sealed P1 1500 passed. The CTO should land a46f759 (supersedes 6d3413a). Sealed test for G21 is the Test Author's.
 - P1.6 (post-phase, AM-1 + sealed-suite fixes) boundary 6d3413a, QGR `…iteration-complete-20261107-0216-9aa1b5f.md`,
   pushed. The CTO should land 6d3413a (supersedes b3024a3). Sealed P1 suite is on `daypart/hac39-sealed` (HAC-39):
   1500 passed against 6d3413a (run it by checking out that branch's engine tests over a detached worktree; read
