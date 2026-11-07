@@ -1,14 +1,24 @@
 ---
 type: session
-trigger: phase-complete
+trigger: iteration-complete
 date: 2026-11-07
 issue: HAC-38
 branch: daypart/hac-fhdic-build
 ---
 
-# Handoff — HAC-38 FHDIC build, after P1
+# Handoff — HAC-38 FHDIC build, after P1.6 (AM-1)
 
 ## State
+- P1.6 (post-phase, AM-1 + sealed-suite fixes) boundary 6d3413a, QGR `…iteration-complete-20261107-0216-9aa1b5f.md`,
+  pushed. The CTO should land 6d3413a (supersedes b3024a3). Sealed P1 suite is on `daypart/hac39-sealed` (HAC-39):
+  1500 passed against 6d3413a (run it by checking out that branch's engine tests over a detached worktree; read
+  failure output only). Unit 2304 passed.
+- AM-1 applied: REVIEWER_STATUS "reviewed: board sign-off 2026-11-07"; Concept.reference_range (null in P1).
+  Addendum G17 (whole-set flag re-run), G18 (crisis = boundary-v1 crisis_markers + member lexicon), G19 (AM-1;
+  the CTO called it G13 but that id was taken).
+- P2 must apply AM-1: task 6 vetting label + "every number in supports/reference_range traces to its source";
+  task 7 renders a sourced range beside the value (population + link) or "no reference range", never high/low.
+  Open before task 6 (QG D2): give Source a structured field for stated ranges.
 - Branch `daypart/hac-fhdic-build` (repo Syntropy-Health/h2s_meta), pushed. P1 phase commit 896eff7 (QGR
   `…phase-complete-20261107-0151-23af1bb.md`); CI green. b3024a3 adds phase-state + brief.
 - Plan: `workstreams/daypart/plan/BUILD-PLAN-fhdic.md` (signed; do NOT edit — plan-gate hash) +
