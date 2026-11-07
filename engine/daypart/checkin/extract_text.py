@@ -15,7 +15,9 @@ Rules, in order:
    blood-pressure pairs ``A/B`` (2-3 digits each, ``B != 10``).
 4. Each keyword group (same concept, same clause) takes the nearest unclaimed number in its clause
    within :data:`NEAR` characters on either side. A keyword that *is* the unit of a number
-   ("8000 steps", "64 bpm") binds to that number first.
+   ("8000 steps", "64 bpm") binds to that number first. A keyword left without a number is a
+   ``missing_value`` proposal, unless a number bound in its clause already records its quantity
+   (a unit the concept accepts, or the BP pair): "walked 8000 steps today" is one proposal.
 5. Confidence: ``high`` = keyword + number + allowed unit; ``medium`` = keyword + number with no
    unit (the concept default is used and ``unit_assumed`` is raised); ``low`` = anything else.
 """
@@ -258,6 +260,13 @@ def _clauses(low: str) -> list[int]:
     return [m.start() for m in _CLAUSE_BREAK.finditer(low)]
 
 
+def _same_quantity(concept: Concept, num: _Num) -> bool:
+    """True when ``num`` (bound to another keyword) already records ``concept``'s quantity."""
+    if num.is_pair:
+        return concept.code in _BP_CODES
+    return num.unit is not None and _norm_unit(concept, num.unit) in _allowed(concept)
+
+
 def _gap(hit: _Hit, num: _Num) -> int:
     if num.start >= hit.end:
         return num.start - hit.end
@@ -334,13 +343,16 @@ def extract(text: str, today: dt.date, *, checkin_id: str = "c-0") -> tuple[Prop
 
     reg = load_registry()
     drafts: list[_Draft] = []
-    numbered_clauses = {g.clause for gi, g in enumerate(groups.values()) if gi in chosen}
+    bound: dict[int, list[_Num]] = {}
+    for gi, g in enumerate(groups.values()):
+        if gi in chosen:
+            bound.setdefault(g.clause, []).append(chosen[gi])
     for gi, g in enumerate(groups.values()):
         start, end = min(h.start for h in g.hits), max(h.end for h in g.hits)
         n = chosen.get(gi)
         if n is None:
-            if g.clause in numbered_clauses:
-                continue  # a bare keyword beside a recorded value ("walked 8000 steps today")
+            if any(_same_quantity(g.concept, b) for b in bound.get(g.clause, ())):
+                continue  # a bare keyword for the value already bound here ("walked 8000 steps today")
             d, amb = date_at(start)
             drafts.append(_Draft(start, end, 0, g.concept, g.concept.display, None, None, d, "low",
                                  {"ambiguous_date"} if amb else set()))

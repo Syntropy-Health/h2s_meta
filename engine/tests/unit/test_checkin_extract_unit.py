@@ -566,3 +566,17 @@ def test_p7_bp_pair_before_sentence_punctuation(text: str) -> None:
 def test_p7_bp_pair_still_rejects_decimals() -> None:
     props = extract("bp 120/80.5", TODAY)
     assert not _by_code(props, "8462-4")
+
+
+def test_p8_bare_keyword_beside_another_concepts_value_is_missing_value() -> None:
+    props = extract("weight 72 kg heart rate high", TODAY)
+    w = _one(props, "29463-7")
+    assert (w.value, w.unit, w.flags) == (72.0, "kg", ())
+    hr = _one(props, "8867-4")
+    assert hr.value is None and "missing_value" in hr.flags and hr.blocking is True
+
+
+@pytest.mark.parametrize("text", ["walked 8000 steps today", "walked 8000 steps", "bp 120/80 systolic"])
+def test_p8_bare_keyword_of_the_bound_quantity_stays_silent(text: str) -> None:
+    props = extract(text, TODAY)
+    assert not [p for p in props if "missing_value" in p.flags], props
