@@ -1,0 +1,65 @@
+# Real-input governance checklist (A&D §4.9, AD7). All 12 items are open and unassigned in
+# this build. Closing every item does NOT enable real input: that also needs the code
+# constant REAL_INPUT_BUILD_ALLOWED changed, a revised PVR and a new design.
+# docs/daypart/real-input-pathway.md renders the same table (a unit test checks they match).
+gates:
+  - id: lawful_basis
+    label: Lawful basis for processing real health data
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: consent
+    label: Informed consent from each person whose data is entered
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: access_control
+    label: Access control for who can enter and view data
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: encryption
+    label: Encryption of data in transit and at rest
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: retention_deletion
+    label: Retention limits and deletion on request
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: audit
+    label: Audit log of access and changes
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: incident_response
+    label: Incident and breach response plan
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: processor_terms
+    label: Terms with every data processor and model provider
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: jurisdiction_review
+    label: Review of the rules in each jurisdiction served
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: clinical_intended_use
+    label: Written clinical intended use and its limits
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: qualified_oversight
+    label: Oversight by a qualified health professional
+    status: open
+    owner: unassigned
+    evidence: null
+  - id: regulatory_review
+    label: Regulatory classification review
+    status: open
+    owner: unassigned
+    evidence: null

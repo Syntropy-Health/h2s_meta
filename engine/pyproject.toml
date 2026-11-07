@@ -45,6 +45,7 @@ include = ["daypart*"]
 "daypart.eval" = ["runs.yaml"]
 "daypart.demo" = ["static/*.html"]
 "daypart.memory" = ["*.json", "*.csv"]
+"daypart.governance" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 addopts = ""

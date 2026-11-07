@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from importlib.resources import files
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from daypart.demo.playground import (
@@ -17,7 +18,10 @@ from daypart.demo.playground import (
     UnknownEpisode,
     UnknownMember,
 )
+from daypart.governance import real_input
 from daypart.simmember.dynamics import INTENTS
+
+log = logging.getLogger("daypart.demo")
 
 IntentName = Annotated[str, Field(json_schema_extra={"enum": list(INTENTS)})]
 
@@ -35,6 +39,15 @@ class StepIn(BaseModel):
     text: str | None = Field(None, max_length=2000)  # None -> the intent's boundary-safe default
 
 
+class ModeIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    real_input: bool
+
+
+def _gate_view(gates: tuple[real_input.Gate, ...]) -> list[dict]:
+    return [{"id": g.id, "label": g.label, "owner": g.owner} for g in gates]
+
+
 def create_app(cohort_seed: int = 0, results_url: str | None = None) -> FastAPI:
     """``results_url`` (or env ``DAYPART_RESULTS_URL``): where ``/results`` redirects (the hosted dashboard)."""
     pg = Playground(cohort_seed)
@@ -45,6 +58,15 @@ def create_app(cohort_seed: int = 0, results_url: str | None = None) -> FastAPI:
         version="0.1.0",
     )
     app.state.playground = pg
+    # AD7: real input is hard off. The env request is read once at start, logged and refused.
+    real_input_requested = real_input.requested_from_env()
+    if real_input_requested:
+        refused = real_input.request_enable()
+        log.warning(
+            "real input requested but refused: %s; open gates: %s",
+            refused.reason,
+            ", ".join(g.id for g in refused.open_gates),
+        )
     index_html = files("daypart.demo").joinpath("static/index.html").read_text(encoding="utf-8")
 
     def _404(what: str, key: str) -> HTTPException:
@@ -63,6 +85,27 @@ def create_app(cohort_seed: int = 0, results_url: str | None = None) -> FastAPI:
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok", "cohort_seed": pg.cohort_seed}
+
+    @app.get("/api/mode")
+    def mode() -> dict:
+        s = real_input.status(requested=real_input_requested)
+        return {
+            "mode": "demo",
+            "real_input": {"enabled": s.enabled, "requested": s.requested, "open_gates": _gate_view(s.open_gates)},
+        }
+
+    @app.post("/api/mode")
+    def set_mode(body: ModeIn) -> JSONResponse:
+        # Always refused, whatever the requested value (A&D API table: "always").
+        refused = real_input.request_enable()
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "real_input_refused",
+                "open_gates": _gate_view(refused.open_gates),
+                "reason": refused.reason,
+            },
+        )
 
     @app.get("/api/intents")
     def intents() -> list[dict]:
