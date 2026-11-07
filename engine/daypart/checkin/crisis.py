@@ -42,7 +42,9 @@ _MEASUREMENT_UNITS = frozenset({"{steps}", "kg", "[lb_av]", "cm", "/min", "%", "
 CRISIS_PATTERNS: tuple[tuple[str, str], ...] = (
     ("die", r"(?:want(?:ed|s)?\s+to|wanna|going\s+to|gonna)\s+die"),
     ("end", r"(?:end|ending|ended)\s+my\s+(?:own\s+)?life|end(?:ing|ed)?\s+it\s+all"
-            r"|(?:take|taking|took)\s+my\s+(?:own\s+)?life"),
+            r"|(?:take|taking|took)\s+my\s+own\s+life"
+            # bare "take my life" only with intent and not "... back" / "... savings" (QG-P1.6-7)
+            r"|(?:want(?:ed|s)?\s+to|wanna|going\s+to|gonna|plan(?:ning)?\s+to|need\s+to|urge\s+to|thinking\s+(?:about|of)|think\s+about|thought\s+about|tried\s+to)\s+(?:take|taking)\s+my\s+life(?!\s+(?:back|in|into|savings)\b)"),
     # "end it" only with intent and nothing after it but a time word ("end it tonight", not "end it early").
     ("end_it", r"(?:going\s+to|gonna|plan(?:ning)?\s+to|want\s+to|wanna|need\s+to|have\s+to)\s+end\s+it"
                r"(?=\s*(?:$|[.,!;?]|(?:right\s+now|tonight|today|now|soon)(?![\w'-])))"),
@@ -51,14 +53,18 @@ CRISIS_PATTERNS: tuple[tuple[str, str], ...] = (
     ("dead", r"wish\s+i\s+(?:was|were)\s+dead|better\s+off\s+dead"
              r"|wish\s+i\s+(?:wasn'?t|was\s+not|weren'?t|were\s+not)\s+alive"),
     ("pills", r"(?:took|taken|take|taking)\s+too\s+many\s+(?:pills|tablets)|overdos(?:e|ed|es|ing)"),
-    ("self_harm", r"self\s*-?\s*harm(?:ing|ed|s)?|(?:hurt|harm|harming|hurting|cut|cutting)\s+my\s*self"),
+    # "cut myself" alone is usually an accident ("chopping onions"): it needs intent (QG-P1.6-7).
+    ("self_harm", r"self\s*-?\s*harm(?:ing|ed|s)?|(?:hurt|harm|harming|hurting|cutting)\s+my\s*self"
+                  r"|(?:want(?:ed|s)?\s+to|wanna|going\s+to|gonna|plan(?:ning)?\s+to|need\s+to|urge\s+to|thinking\s+(?:about|of)|think\s+about|thought\s+about|tried\s+to)\s+cut\s+my\s*self"),
     ("method", r"hang(?:ing)?\s+my\s*self|jump(?:ing)?\s+off\s+(?:a|the)\s+(?:bridge|building|roof|cliff|balcony)"),
     # Passive ideation, in the wording screening instruments use (wish to be dead / not wake up).
     ("no_wake", r"(?:go\s+to\s+sleep|fall\s+asleep)\s+and\s+(?:not|never)\s+wake\s+up"
                 r"|(?:hope|wish)\s+i\s+(?:don'?t|do\s+not|never|won'?t)\s+wake\s+up"),
     ("not_here", r"(?:don'?t|do\s+not)\s+want\s+to\s+(?:be\s+here\s+any\s*more|exist)"
-                 r"|better\s+off\s+(?:without\s+me|gone)|disappear\s+forever"),
-    ("no_point", r"no\s+point\s+(?:in\s+)?living|(?:isn'?t|is\s+not|not)\s+worth\s+living|point\s+of\s+living"),
+                 r"|better\s+off\s+(?:without\s+me|gone)"
+                 r"|(?:want\s+to|wanna|wish\s+i\s+could|i\s+could|i'?d\s+like\s+to)\s+disappear\s+forever"),
+    ("no_point", r"no\s+point\s+(?:in\s+)?living|(?:isn'?t|is\s+not|not)\s+worth\s+living"
+                 r"|(?:what'?s|what\s+is|no)\s+(?:the\s+)?point\s+(?:of|in)\s+living(?!\s+(?:well|better|healthy)\b)"),
     ("unsafe", r"(?:i'?m|i\s+am)\s+not\s+safe|(?:can'?t|cannot|can\s+not)\s+keep\s+my\s*self\s+safe"
                r"|i\s+(?:don'?t|do\s+not)\s+feel\s+safe(?=\s*(?:$|[.,!;?]|right\s+now|any\s*more|with\s+my\s*self))"),
     ("cant_go_on", r"(?:can'?t|cannot|can\s+not)\s+go\s+on"),
