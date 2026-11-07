@@ -111,7 +111,7 @@ def test_malformed_text_extractor_output_never_reaches_the_journal(journal, monk
     monkeypatch.setattr(service, "extract", lambda *a, **k: ({**_good(), "risk_score": 1},))
     with pytest.raises(CheckinError) as e:
         service.create_checkin(journal, text="slept 6 hours")
-    assert e.value.status == 500 and e.value.error == "extractor_output_invalid"
+    assert e.value.status == 500 and e.value.body == {"error": "extractor_output_invalid"}
     _assert_untouched(journal)
 
 
@@ -121,5 +121,5 @@ def test_malformed_fixture_extractor_output_never_reaches_the_journal(journal, m
     monkeypatch.setattr(fixtures, "proposals_for", lambda *a, **k: (forged,))
     with pytest.raises(CheckinError) as e:
         service.create_checkin(journal, fixture_id=fid)
-    assert e.value.status == 500 and e.value.error == "extractor_output_invalid"
+    assert e.value.status == 500 and e.value.body == {"error": "extractor_output_invalid"}
     _assert_untouched(journal)
