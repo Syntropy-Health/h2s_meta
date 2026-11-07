@@ -36,7 +36,13 @@
       ],
       "reviewer_status": "reviewed: board sign-off 2026-11-07",
       "allowed_use": "demo display of self-reported or simulated values; no interpretation",
-      "reference_range": null
+      "reference_range": {
+        "low": 60.0,
+        "high": 100.0,
+        "unit": "/min",
+        "population": "average healthy adult while resting",
+        "source_evidence_id": "ev:medlineplus-vital-signs"
+      }
     },
     {
       "concept_id": "chc:bp-systolic",
@@ -59,7 +65,13 @@
       ],
       "reviewer_status": "reviewed: board sign-off 2026-11-07",
       "allowed_use": "demo display of self-reported or simulated values; no interpretation",
-      "reference_range": null
+      "reference_range": {
+        "low": 90.0,
+        "high": 120.0,
+        "unit": "mm[Hg]",
+        "population": "average healthy adult while resting",
+        "source_evidence_id": "ev:medlineplus-vital-signs"
+      }
     },
     {
       "concept_id": "chc:bp-diastolic",
@@ -80,7 +92,13 @@
       ],
       "reviewer_status": "reviewed: board sign-off 2026-11-07",
       "allowed_use": "demo display of self-reported or simulated values; no interpretation",
-      "reference_range": null
+      "reference_range": {
+        "low": 60.0,
+        "high": 80.0,
+        "unit": "mm[Hg]",
+        "population": "average healthy adult while resting",
+        "source_evidence_id": "ev:medlineplus-vital-signs"
+      }
     },
     {
       "concept_id": "chc:body-weight",
@@ -153,7 +171,13 @@
       ],
       "reviewer_status": "reviewed: board sign-off 2026-11-07",
       "allowed_use": "demo display of self-reported or simulated values; no interpretation",
-      "reference_range": null
+      "reference_range": {
+        "low": 18.5,
+        "high": 24.9,
+        "unit": "kg/m2",
+        "population": "adult men and women",
+        "source_evidence_id": "ev:nhlbi-bmi"
+      }
     },
     {
       "concept_id": "chc:body-temperature",
@@ -176,7 +200,13 @@
       ],
       "reviewer_status": "reviewed: board sign-off 2026-11-07",
       "allowed_use": "demo display of self-reported or simulated values; no interpretation",
-      "reference_range": null
+      "reference_range": {
+        "low": 36.5,
+        "high": 37.3,
+        "unit": "Cel",
+        "population": "average healthy adult while resting",
+        "source_evidence_id": "ev:medlineplus-vital-signs"
+      }
     },
     {
       "concept_id": "chc:respiratory-rate",
@@ -198,7 +228,13 @@
       ],
       "reviewer_status": "reviewed: board sign-off 2026-11-07",
       "allowed_use": "demo display of self-reported or simulated values; no interpretation",
-      "reference_range": null
+      "reference_range": {
+        "low": 12.0,
+        "high": 18.0,
+        "unit": "/min",
+        "population": "average healthy adult while resting",
+        "source_evidence_id": "ev:medlineplus-vital-signs"
+      }
     },
     {
       "concept_id": "chc:spo2",
@@ -339,7 +375,13 @@
       ],
       "reviewer_status": "reviewed: board sign-off 2026-11-07",
       "allowed_use": "demo display of self-reported or simulated values; no interpretation",
-      "reference_range": null
+      "reference_range": {
+        "low": 7.0,
+        "high": 9.0,
+        "unit": "h",
+        "population": "adults",
+        "source_evidence_id": "ev:nhlbi-how-much-sleep"
+      }
     },
     {
       "concept_id": "chc:adherence-protocol",

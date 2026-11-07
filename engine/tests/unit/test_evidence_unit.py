@@ -217,9 +217,10 @@ def test_registry_rejects_duplicate_ids():
 
 
 def _registry_with(rr: ReferenceRange | None) -> ConceptRegistry:
+    """The shipped concepts with only heart-rate's range set (to ``rr``); every other range cleared."""
     base = load_registry()
     concepts = tuple(
-        c.model_copy(update={"reference_range": rr}) if c.concept_id == "chc:heart-rate" else c
+        c.model_copy(update={"reference_range": rr if c.concept_id == "chc:heart-rate" else None})
         for c in base.concepts()
     )
     return ConceptRegistry(concepts, base.gaps, base.loinc_version)
@@ -253,10 +254,4 @@ def test_check_reference_ranges_accepts_a_matching_range():
          "population": "adults", "statement": "60 to 100"}])),))
     rr = ReferenceRange(low=60, high=100, unit="/min", population="adults", source_evidence_id="ev:test")
     reg = _registry_with(rr)
-    # only heart-rate is checked against this one-source registry; other ranged concepts are cleared
-    reg = ConceptRegistry(
-        tuple(c if c.concept_id == "chc:heart-rate" else c.model_copy(update={"reference_range": None})
-              for c in reg.concepts()),
-        reg.gaps, reg.loinc_version,
-    )
     check_reference_ranges(reg, ev)

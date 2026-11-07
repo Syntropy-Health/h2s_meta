@@ -1,0 +1,143 @@
+{
+  "registry": "sources-v1",
+  "vetting": "reviewed: board sign-off 2026-11-07",
+  "notes": [
+    "Public NIH and WHO pages only, fetched 2026-11-07. A stated range copies the page's own sentence; no number is derived, converted or interpolated (AM-1).",
+    "WHO states weekly activity amounts; the exercise and step concepts record single entries, so no range is taken from it.",
+    "AHA and CDC pages refuse automated fetches, so they are not cited."
+  ],
+  "sources": [
+    {
+      "evidence_id": "ev:medlineplus-vital-signs",
+      "title": "Vital signs",
+      "publisher": "MedlinePlus, U.S. National Library of Medicine",
+      "url": "https://medlineplus.gov/ency/article/002341.htm",
+      "accessed": "2026-11-07",
+      "supports": "Pulse, blood pressure, breathing rate and body temperature are the routine vital signs, and each can be measured at home.",
+      "applies_to": [
+        "chc:heart-rate",
+        "chc:bp-systolic",
+        "chc:bp-diastolic",
+        "chc:respiratory-rate",
+        "chc:body-temperature"
+      ],
+      "vetting": "reviewed: board sign-off 2026-11-07",
+      "stated_ranges": [
+        {
+          "concept_id": "chc:heart-rate",
+          "low": 60.0,
+          "high": 100.0,
+          "unit": "/min",
+          "population": "average healthy adult while resting",
+          "statement": "Pulse: 60 to 100 beats per minute"
+        },
+        {
+          "concept_id": "chc:bp-systolic",
+          "low": 90.0,
+          "high": 120.0,
+          "unit": "mm[Hg]",
+          "population": "average healthy adult while resting",
+          "statement": "Blood pressure: between 90/60 mmHg and 120/80 mmHg"
+        },
+        {
+          "concept_id": "chc:bp-diastolic",
+          "low": 60.0,
+          "high": 80.0,
+          "unit": "mm[Hg]",
+          "population": "average healthy adult while resting",
+          "statement": "Blood pressure: between 90/60 mmHg and 120/80 mmHg"
+        },
+        {
+          "concept_id": "chc:respiratory-rate",
+          "low": 12.0,
+          "high": 18.0,
+          "unit": "/min",
+          "population": "average healthy adult while resting",
+          "statement": "Breathing: 12 to 18 breaths per minute"
+        },
+        {
+          "concept_id": "chc:body-temperature",
+          "low": 36.5,
+          "high": 37.3,
+          "unit": "Cel",
+          "population": "average healthy adult while resting",
+          "statement": "Temperature: 97.7°F to 99.1°F (36.5°C to 37.3°C); average 98.6°F (37°C)"
+        }
+      ]
+    },
+    {
+      "evidence_id": "ev:nhlbi-high-blood-pressure",
+      "title": "High Blood Pressure",
+      "publisher": "National Heart, Lung, and Blood Institute (NIH)",
+      "url": "https://www.nhlbi.nih.gov/health/high-blood-pressure",
+      "accessed": "2026-11-07",
+      "supports": "Blood pressure is written as two numbers, systolic over diastolic, and it changes through the day with activity.",
+      "applies_to": [
+        "chc:bp-systolic",
+        "chc:bp-diastolic"
+      ],
+      "vetting": "reviewed: board sign-off 2026-11-07",
+      "stated_ranges": []
+    },
+    {
+      "evidence_id": "ev:nhlbi-bmi",
+      "title": "Calculate Your BMI",
+      "publisher": "National Heart, Lung, and Blood Institute (NIH)",
+      "url": "https://www.nhlbi.nih.gov/calculate-your-bmi",
+      "accessed": "2026-11-07",
+      "supports": "Body mass index is calculated from height and weight; it does not account for muscle mass or bone density.",
+      "applies_to": [
+        "chc:bmi",
+        "chc:body-weight",
+        "chc:body-height"
+      ],
+      "vetting": "reviewed: board sign-off 2026-11-07",
+      "stated_ranges": [
+        {
+          "concept_id": "chc:bmi",
+          "low": 18.5,
+          "high": 24.9,
+          "unit": "kg/m2",
+          "population": "adult men and women",
+          "statement": "Healthy (18.5 – 24.9)"
+        }
+      ]
+    },
+    {
+      "evidence_id": "ev:nhlbi-how-much-sleep",
+      "title": "How Much Sleep Is Enough?",
+      "publisher": "National Heart, Lung, and Blood Institute (NIH)",
+      "url": "https://www.nhlbi.nih.gov/health/sleep/how-much-sleep",
+      "accessed": "2026-11-07",
+      "supports": "Sleep duration is tracked because how long a person sleeps each night is part of everyday health.",
+      "applies_to": [
+        "chc:sleep-duration"
+      ],
+      "vetting": "reviewed: board sign-off 2026-11-07",
+      "stated_ranges": [
+        {
+          "concept_id": "chc:sleep-duration",
+          "low": 7.0,
+          "high": 9.0,
+          "unit": "h",
+          "population": "adults",
+          "statement": "Experts recommend that adults sleep between 7 and 9 hours a night."
+        }
+      ]
+    },
+    {
+      "evidence_id": "ev:who-physical-activity",
+      "title": "Physical activity (fact sheet)",
+      "publisher": "World Health Organization",
+      "url": "https://www.who.int/news-room/fact-sheets/detail/physical-activity",
+      "accessed": "2026-11-07",
+      "supports": "Steps and exercise time are simple records of physical activity, which WHO describes as part of health at every age.",
+      "applies_to": [
+        "chc:steps",
+        "chc:exercise-duration"
+      ],
+      "vetting": "reviewed: board sign-off 2026-11-07",
+      "stated_ranges": []
+    }
+  ]
+}

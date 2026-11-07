@@ -247,11 +247,17 @@ def test_am1_label_is_honest():
 
 
 def test_am1_every_concept_carries_reference_range_null_without_a_source():
-    # No source registry ships in P1 (sources_v1.json is P2 task 6), so no range is sourced yet: AM-1
-    # item 2 says an unsourced range stays null. The key is always present in the dumped concept.
+    # AM-1 item 2: a range is set only where a sources_v1.json entry states it (P2 task 6); the key is
+    # always present in the dumped concept. The tracing itself is pinned in test_evidence_unit.py.
+    from daypart.evidence.registry import load_evidence
+
+    ev = load_evidence()
     for c in load_registry().concepts():
-        assert c.reference_range is None
-        assert "reference_range" in c.model_dump() and c.model_dump()["reference_range"] is None
+        assert "reference_range" in c.model_dump()
+        if c.reference_range is not None:
+            assert ev.by_id(c.reference_range.source_evidence_id) is not None
+        if not ev.for_concept(c.concept_id):
+            assert c.reference_range is None and c.model_dump()["reference_range"] is None
 
 
 def test_am1_reference_range_model():
@@ -277,12 +283,15 @@ def test_am1_reference_range_model():
         Concept(**{**good, "reference_range": {**rr, "low": None, "high": None}})
 
 
-def test_am1_registry_json_states_reference_range_null_explicitly():
+def test_am1_registry_json_states_reference_range_explicitly():
     raw = json.loads(resources.files("daypart.memory").joinpath("registry_a4.json").read_text("utf-8"))
     concepts = raw["concepts"] if isinstance(raw, dict) else raw
     assert len(concepts) == 20
     for c in concepts:
-        assert "reference_range" in c and c["reference_range"] is None, c["code"]
+        # the key is always explicit; null unless a source states it (traced in test_evidence_unit.py)
+        assert "reference_range" in c, c["code"]
+        rr = c["reference_range"]
+        assert rr is None or rr["source_evidence_id"].startswith("ev:"), c["code"]
         assert c["reviewer_status"] == REVIEWER
 
 
