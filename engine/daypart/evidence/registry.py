@@ -138,7 +138,9 @@ class Source(pydantic.BaseModel):
 
 
 class EvidenceRegistry:
-    """Read-only lookup over the sources."""
+    """Read-only lookup over the sources. Slotted: the cached shared instance cannot be rebound."""
+
+    __slots__ = ("_by_id", "_concepts", "_sources")
 
     def __init__(self, sources: tuple[Source, ...], concepts: ConceptRegistry | None = None) -> None:
         by_id: dict[str, Source] = {}
