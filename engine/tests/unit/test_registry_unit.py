@@ -1,6 +1,7 @@
 """Unit tests for the A4 concept registry (A&D §4.3, R5: T5.1, T5.2, T5.6; plan G3-G5)."""
 
 import csv
+import json
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
@@ -274,3 +275,25 @@ def test_am1_reference_range_model():
     assert one_sided.reference_range.low is None  # a guideline may state only an upper bound
     with pytest.raises(pydantic.ValidationError):
         Concept(**{**good, "reference_range": {**rr, "low": None, "high": None}})
+
+
+def test_am1_registry_json_states_reference_range_null_explicitly():
+    raw = json.loads(resources.files("daypart.memory").joinpath("registry_a4.json").read_text("utf-8"))
+    concepts = raw["concepts"] if isinstance(raw, dict) else raw
+    assert len(concepts) == 20
+    for c in concepts:
+        assert "reference_range" in c and c["reference_range"] is None, c["code"]
+        assert c["reviewer_status"] == REVIEWER
+
+
+def test_am1_reference_range_edges():
+    weight = load_registry().by_code("29463-7").model_dump()
+    rr = {"low": 100, "high": 200, "unit": "[lb_av]", "population": "adults", "source_evidence_id": "ev-x"}
+    assert Concept(**{**weight, "reference_range": rr}).reference_range.unit == "[lb_av]"  # an alt unit
+    for bad in ({**rr, "unit": "cm"}, {**rr, "low": 150, "high": 150}, {**rr, "high": float("inf")}):
+        with pytest.raises(pydantic.ValidationError):
+            Concept(**{**weight, "reference_range": bad})
+    upper_open = Concept(**{**weight, "reference_range": {**rr, "high": None}}).reference_range
+    assert upper_open.low == 100 and upper_open.high is None
+    with pytest.raises(pydantic.ValidationError):
+        upper_open.low = 1  # type: ignore[misc]

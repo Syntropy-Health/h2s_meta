@@ -385,6 +385,31 @@ def test_contradiction_not_cleared_by_discarding_one_side(client):
     assert ok.json()["discarded"] == ["p-1", "p-2"] and ok.json()["written"] == []
 
 
+def test_contradiction_with_one_side_saved_unmapped(client):
+    _jid, ck = _pending(client, "slept 6 hours and slept 7 hours")
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "save_unmapped"},
+    ])
+    assert r.status_code == 422 and r.json()["error"] == "unresolved_flags"
+    assert [p["proposal_id"] for p in r.json()["proposals"]] == ["p-1"]
+    ok = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "save_unmapped"}, {"proposal_id": "p-2", "action": "save_unmapped"},
+    ])
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["written"] == [] and ok.json()["discarded"] == [] and len(ok.json()["records"]) == 2
+
+
+def test_bp_contradiction_cleared_by_correcting_systolic(client):
+    jid, ck = _pending(client, "bp 80/120")
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "correct", "value": 130, "unit": "mm[Hg]"},
+        {"proposal_id": "p-2", "action": "discard"},
+    ])
+    assert r.status_code == 200, r.text
+    assert r.json()["discarded"] == ["p-2"]
+    assert [e.code for e in _signals(_j(client, jid))] == ["8480-6"]
+
+
 def test_bp_contradiction_not_cleared_by_discarding_diastolic(client):
     _jid, ck = _pending(client, "bp 80/120")
     r = _review(client, ck["checkin_id"], [
