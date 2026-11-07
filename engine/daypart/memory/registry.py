@@ -13,15 +13,21 @@ never rendered and carry no clinical meaning.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 import math
+from collections.abc import Mapping
 from functools import cache
 from importlib import resources
 from types import MappingProxyType
 from typing import Literal
 
 import pydantic
-from pydantic import ConfigDict, Field, field_serializer, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from daypart.memory.ontology import (
     CORE_CAVEATS,
