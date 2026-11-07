@@ -189,7 +189,7 @@ New code lives under `engine/daypart/`. Existing modules are extended, never for
 
 | Unit | Path | Does | Used by | Depends on |
 |---|---|---|---|---|
-| Concept registry | `memory/registry.py` + `memory/registry_a4.json` + `memory/loinc_verify_v1.csv` | The A4 slice: one `Concept` per observable (§4.3). `slice_ontology()` = `apply_update(core(), …)` adding only the 12 LOINC nodes not already in `core()`; version `core-v1+u1` (the name `apply_update` assigns). | extractor, journal, passport | `ontology` |
+| Concept registry | `memory/registry.py` + `memory/registry_a4.json` + `memory/loinc_verify_v1.csv` | The A4 slice: one `Concept` per observable (§4.3). `slice_ontology()` = `apply_update(core(), …)` adding only the 12 LOINC nodes not already in `core()`; version `core-v1+u1` (the name `apply_update` assigns). | extractor, journal, evidence registry, passport | `ontology` |
 | Governance gate | `governance/real_input.py` + `governance/real_input.yaml` | Checklist load, `status()`, `request_enable()` → always `Refused` | app (mode endpoint, startup), UI | — |
 | PII tripwire | `checkin/tripwire.py` | `scan(text) -> list[str]` (reason codes) | check-in service | — |
 | Text extractor | `checkin/extract_text.py` | `extract(text, today) -> list[Proposal]` | check-in service | registry |
@@ -197,7 +197,7 @@ New code lives under `engine/daypart/`. Existing modules are extended, never for
 | Extractor boundary | `checkin/extractor.py` | `Extractor` protocol; `validate_proposals(output) -> tuple[Proposal, ...]` (§4.1 contract) | check-in service | models |
 | Check-in service | `checkin/service.py` | `create_checkin` (gate → crisis check → PII tripwire → extract → validate, G21), `review` (all-or-nothing), state machine | app | journal, extractors, tripwire, crisis, gate |
 | Journal | `checkin/journal.py` | Per-visitor clone: member profile ref, `EventLog`, `ProvenanceStore`, `MemoryLhm`, synthetic clock | service, passport view, next step | `memory.events`, `memory.lhm`, `simmember` |
-| Evidence registry | `evidence/registry.py` + `evidence/sources_v1.json` | `Source` entries, `for_concept(code)` | passport view | — |
+| Evidence registry | `evidence/registry.py` + `evidence/sources_v1.json` | `Source` entries, `sources()`, `by_id(evidence_id)`, `for_concept(code)` (a concept_id or a code); `load_evidence()` cross-checks every concept `reference_range` | passport view | registry |
 | Passport view | `passport/view.py` | `health_clone_passport(journal, as_of) -> HealthClonePassport` (observation cards + existing LHM flags + inventory) | app | `passport.render`, registry, evidence, journal |
 | Next step | `checkin/next_step.py` | `suggest(journal) -> NextStep` through `membrane.post`/`dsl.check`; `record_choice` | app | membrane, journal |
 | Lab rows | `demo/lab.py` | `lab_rows(results_dir) -> LabTable` from the committed JSON (§4.8) | app, submission pack | `dashboard_data` loaders |
@@ -406,7 +406,10 @@ number in `supports` or in a concept's `reference_range` traces to its source en
 checks each range's `source_evidence_id` resolves and its numbers appear in that entry); a concept
 without a source has `reference_range=null`. A concept's `reference_range` equals the stated range
 of its `source_evidence_id` exactly, and every stated range is carried by its concept; the loader
-refuses anything else. `for_concept` accepts a concept_id or a LOINC/local code.
+refuses anything else. The loader is `load_evidence()`; anything that renders a range reads it
+through the evidence registry, never through `load_registry()` alone. `for_concept` accepts a
+concept_id or a LOINC/local code. A source `url` is a public https name (no IP, no credentials, no
+port), and the review-copy rule covers `population` and `statement` too.
 
 ### 4.7 Next step
 
