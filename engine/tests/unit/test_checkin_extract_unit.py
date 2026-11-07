@@ -519,3 +519,38 @@ def test_p4_ssn_with_spaces_or_dots_is_national_id(text: str) -> None:
 )
 def test_p4_ssn_quiet_on_measurement_sequences(text: str) -> None:
     assert "national_id" not in scan(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # die
+        "I wanted to die last night", "I wanna die", "I'm going to die by my own hand", "I'm gonna die, I want it",
+        # end
+        "thinking of ending my life", "I ended my life once almost", "I want to end it all",
+        # kill
+        "I killed myself almost", "thought about killing my self", "I want to kill my self",
+        # not live
+        "I don't want to live anymore", "I do not want to live", "I don’t want to live",
+        # dead
+        "I wish I was dead", "I wish I were dead",
+        # pills
+        "I took too many pills", "I have taken too many pills", "I might take too many pills",
+        "I overdose sometimes", "overdosing again", "I OVERDOSED",
+        # self harm, any dash or space
+        "self–harm again", "self—harm", "self - harm", "self  harm", "self-harmed yesterday",
+        # suicid*
+        "suicidality is back", "Suicide", "SUICIDAL thoughts",
+    ],
+)
+def test_p2_crisis_families_detected(text: str) -> None:
+    assert is_crisis(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["dead tired after work", "reading about harm reduction", "my rent is overdue", "self-harmony yoga class",
+     "pain 4/10", "I'm dying to try the new trail", "the battery will die soon", "end of my shift"],
+)
+def test_p2_crisis_quiet_on_lookalikes(text: str) -> None:
+    assert is_crisis(text) is False
