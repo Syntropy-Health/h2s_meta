@@ -136,7 +136,7 @@ def create_checkin(
         try:
             proposals = fixtures.proposals_for(fixture_id, journal.today, checkin_id=checkin_id)
         except fixtures.UnknownFixture:
-            raise CheckinError(404, "unknown_fixture") from None
+            raise CheckinError(422, "not_a_demo_fixture", message=NOT_A_DEMO_FIXTURE_MESSAGE) from None
 
     checkin = CheckIn(
         checkin_id=checkin_id,

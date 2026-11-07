@@ -222,7 +222,7 @@ def test_t2_4_crisis_text_handoff_no_checkin_no_events(client):
     ({"text": "hello there"}, 422, "nothing_extracted"),
     ({"text": "slept 6 hours " + "x" * 500}, 422, "text_too_long"),
     ({"text": "slept 6 hours", "fixture_id": "demo-scale-photo"}, 422, None),
-    ({"fixture_id": "demo-no-such-fixture"}, 404, "unknown_fixture"),
+    ({"fixture_id": "demo-no-such-fixture"}, 422, "not_a_demo_fixture"),
 ])
 def test_rejections_leave_journal_unchanged(client, payload, status, error):
     jid = _journal(client)
@@ -236,6 +236,8 @@ def test_rejections_leave_journal_unchanged(client, payload, status, error):
         assert body["error"] == error
     if error == "nothing_extracted":
         assert "slept 7 hours" in body["hint"]
+    if error == "not_a_demo_fixture":
+        assert body["message"] == "Only the bundled demo files can be used."
     assert _snapshot(j) == snap
 
 
