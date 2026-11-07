@@ -1,0 +1,33 @@
+{
+  "fixture_id": "demo-symptom-json",
+  "method": "fixture-sidecar-v1",
+  "synthetic": true,
+  "note": "Pre-recorded extraction of a synthetic demo fixture.",
+  "items": [
+    {
+      "concept_code": "72514-3",
+      "value": 3.0,
+      "unit": "{score}",
+      "date_offset_days": 0,
+      "snippet": "entries[0]: \"pain_0_10\": 3",
+      "confidence": "high"
+    },
+    {
+      "concept_code": null,
+      "value": null,
+      "unit": null,
+      "date_offset_days": 0,
+      "snippet": "entries[0]: \"note\": \"knee\"",
+      "confidence": "low",
+      "display": "knee"
+    },
+    {
+      "concept_code": "55758-7",
+      "value": 1.0,
+      "unit": "{score}",
+      "date_offset_days": -1,
+      "snippet": "entries[1]: \"phq2_total\": 1",
+      "confidence": "high"
+    }
+  ]
+}

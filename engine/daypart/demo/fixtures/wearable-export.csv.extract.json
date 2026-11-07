@@ -1,0 +1,32 @@
+{
+  "fixture_id": "demo-wearable-csv",
+  "method": "fixture-sidecar-v1",
+  "synthetic": true,
+  "note": "Pre-recorded extraction of a synthetic demo fixture.",
+  "items": [
+    {
+      "concept_code": "41950-7",
+      "value": 8120.0,
+      "unit": "{steps}/(24.h)",
+      "date_offset_days": -1,
+      "snippet": "row -1: steps=8120",
+      "confidence": "high"
+    },
+    {
+      "concept_code": "93832-4",
+      "value": 6.1,
+      "unit": "h",
+      "date_offset_days": 0,
+      "snippet": "row 0: sleep_hours=6.1",
+      "confidence": "high"
+    },
+    {
+      "concept_code": "8867-4",
+      "value": 62.0,
+      "unit": null,
+      "date_offset_days": 0,
+      "snippet": "row 0: resting_heart_rate=62",
+      "confidence": "medium"
+    }
+  ]
+}

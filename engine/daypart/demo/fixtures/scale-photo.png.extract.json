@@ -1,0 +1,16 @@
+{
+  "fixture_id": "demo-scale-photo",
+  "method": "fixture-sidecar-v1",
+  "synthetic": true,
+  "note": "Pre-recorded extraction of a synthetic demo fixture.",
+  "items": [
+    {
+      "concept_code": "29463-7",
+      "value": 72.4,
+      "unit": "kg",
+      "date_offset_days": 0,
+      "snippet": "display: 72.4 kg",
+      "confidence": "high"
+    }
+  ]
+}

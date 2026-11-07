@@ -1,0 +1,14 @@
+{
+  "synthetic": true,
+  "entries": [
+    {
+      "date_offset_days": 0,
+      "pain_0_10": 3,
+      "note": "knee"
+    },
+    {
+      "date_offset_days": -1,
+      "phq2_total": 1
+    }
+  ]
+}

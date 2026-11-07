@@ -1,0 +1,34 @@
+{
+  "demo-bp-cuff": {
+    "file": "bp-cuff.jpg",
+    "kind": "image_fixture",
+    "label": "Demo image: blood pressure monitor",
+    "sha256": "35e7b8cbc64e3058d6a71b7ae9182a5dd8255589fc2978e6379fa45654932d4e",
+    "size": 11002,
+    "type": "jpeg"
+  },
+  "demo-scale-photo": {
+    "file": "scale-photo.png",
+    "kind": "image_fixture",
+    "label": "Demo image: bathroom scale",
+    "sha256": "4200d82178f793e9b580df5ed242ac054e5176cf4b8e653e056dad801f446640",
+    "size": 4195,
+    "type": "png"
+  },
+  "demo-symptom-json": {
+    "file": "symptom-diary.json",
+    "kind": "file_fixture",
+    "label": "Demo file: symptom diary (JSON)",
+    "sha256": "21cd706d2bdeda8371d94b174779323828e3b1f7df171b5b06e909004a295876",
+    "size": 193,
+    "type": "json"
+  },
+  "demo-wearable-csv": {
+    "file": "wearable-export.csv",
+    "kind": "file_fixture",
+    "label": "Demo file: 3-day wearable export (CSV)",
+    "sha256": "81b3802487d4d3d708facc3530a45baadde8b7adc5d9f95827b6700759e9be52",
+    "size": 98,
+    "type": "csv"
+  }
+}

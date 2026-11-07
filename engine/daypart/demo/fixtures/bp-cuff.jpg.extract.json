@@ -1,0 +1,32 @@
+{
+  "fixture_id": "demo-bp-cuff",
+  "method": "fixture-sidecar-v1",
+  "synthetic": true,
+  "note": "Pre-recorded extraction of a synthetic demo fixture.",
+  "items": [
+    {
+      "concept_code": "8480-6",
+      "value": 118.0,
+      "unit": "mm[Hg]",
+      "date_offset_days": 0,
+      "snippet": "display: SYS 118 mmHg",
+      "confidence": "high"
+    },
+    {
+      "concept_code": "8462-4",
+      "value": 76.0,
+      "unit": "mm[Hg]",
+      "date_offset_days": 0,
+      "snippet": "display: DIA 76 mmHg",
+      "confidence": "high"
+    },
+    {
+      "concept_code": "8867-4",
+      "value": 64.0,
+      "unit": null,
+      "date_offset_days": 0,
+      "snippet": "display: PULSE 64",
+      "confidence": "medium"
+    }
+  ]
+}

@@ -43,7 +43,7 @@ include = ["daypart*"]
 [tool.setuptools.package-data]
 "daypart.membrane" = ["rules/*.yaml"]
 "daypart.eval" = ["runs.yaml"]
-"daypart.demo" = ["static/*.html"]
+"daypart.demo" = ["static/*.html", "fixtures/*"]
 "daypart.memory" = ["*.json", "*.csv"]
 "daypart.governance" = ["*.yaml"]
 
