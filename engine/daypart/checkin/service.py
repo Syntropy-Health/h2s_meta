@@ -23,7 +23,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal
 
 import pydantic
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, StrictFloat, StrictInt
 
 from daypart.checkin import fixtures
 from daypart.checkin.crisis import HANDOFF_TEXT, is_crisis
@@ -70,7 +70,8 @@ class Decision(pydantic.BaseModel):
 
     proposal_id: str = Field(min_length=1)
     action: Action
-    value: float | None = None
+    # Strict: a JSON number only. Booleans and numeric strings are refused (invalid_request).
+    value: StrictInt | StrictFloat | None = None
     unit: str | None = None
     date: dt.date | None = None
 
@@ -201,6 +202,8 @@ def _correction_reasons(journal: Journal, p: Proposal, d: Decision) -> list[str]
     if d.unit is not None and d.unit not in allowed:
         reasons.append("unit_not_allowed")
     if d.value is not None:
+        if concept.value_type in ("integer", "ordinal") and math.isfinite(d.value) and not float(d.value).is_integer():
+            reasons.append("not_a_whole_number")
         factor = allowed.get(unit, 1.0) if unit is not None else 1.0
         lo, hi = concept.plausible
         if not (math.isfinite(d.value) and lo <= d.value * factor <= hi):

@@ -939,3 +939,55 @@ def test_confirm_extracted_date_outside_window_is_unresolved(client):
     assert fixed.status_code == 200, fixed.text
     (event,) = _signals(j)
     assert event.occurred_at.date() == TODAY - dt.timedelta(days=3)
+
+
+# --- QG-P1-H3: integer / ordinal corrections must be whole numbers; value is strictly numeric -------
+
+
+def test_fractional_correction_on_integer_concept_refused(client):
+    jid, ck = _pending(client, "phq-2 score 3")
+    j = _j(client, jid)
+    snap = _snapshot(j)
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "correct", "value": 2.5, "unit": "{score}"},
+    ])
+    assert r.status_code == 422 and r.json()["error"] == "invalid_correction"
+    assert r.json()["proposals"] == [{"proposal_id": "p-1", "reasons": ["not_a_whole_number"]}]
+    _assert_no_bounds(r.json())
+    assert _snapshot(j)[:2] == snap[:2]
+
+
+@pytest.mark.parametrize("value", [True, False, "3"])
+def test_non_numeric_correction_value_is_invalid_request(client, value):
+    _jid, ck = _pending(client, "phq-2 score 3")
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "correct", "value": value, "unit": "{score}"},
+    ])
+    assert r.status_code == 422 and r.json()["error"] == "invalid_request"
+
+
+def test_whole_number_correction_on_integer_concept_accepted(client):
+    jid, ck = _pending(client, "phq-2 score 3")
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "correct", "value": 3, "unit": "{score}"},
+    ])
+    assert r.status_code == 200, r.text
+    (event,) = _signals(_j(client, jid))
+    assert event.code == "55758-7" and event.value == 3
+
+
+def test_ordinal_concept_rejects_fractional_correction(cohort):
+    from daypart.checkin.models import METHOD_TEXT, CheckIn, Proposal
+
+    j = JournalStore(cohort).create("syn-003")
+    p = Proposal(
+        proposal_id="p-1", concept_code="dp:symptom.severity", display="Symptom severity", value=2.0,
+        unit="{score}", date=j.today, source_kind="text", source_ref="c:0-1", snippet="x",
+        method=METHOD_TEXT, confidence="high", flags=(),
+    )
+    j.checkins["c-x"] = CheckIn(checkin_id="c-x", journal_id=j.journal_id, created_at=dt.datetime.now(dt.UTC),
+                                status="pending_review", proposals=(p,))
+    with pytest.raises(CheckinError) as e:
+        asyncio.run(service.review(j, "c-x", [{"proposal_id": "p-1", "action": "correct", "value": 1.5}]))
+    assert e.value.body == {"error": "invalid_correction",
+                            "proposals": [{"proposal_id": "p-1", "reasons": ["not_a_whole_number"]}]}
