@@ -328,3 +328,18 @@ def test_b1_low_must_come_before_high_in_the_statement():
     with pytest.raises(pydantic.ValidationError, match="low bound must come before"):
         StatedRange.model_validate({**HR_RANGE, "statement": "Pulse: 100 at most, 60 at least"})
     assert StatedRange.model_validate(HR_RANGE).low == 60
+
+
+@pytest.mark.parametrize(
+    ("over", "msg"),
+    [
+        ({"low": None, "high": None}, "at least one bound"),
+        ({"high": float("inf")}, "finite"),
+        ({"low": float("nan")}, "finite"),
+        ({"low": 100, "high": 60}, "below high"),
+        ({"low": 60, "high": 60, "statement": "60"}, "below high"),
+    ],
+)
+def test_f1_stated_range_branches(over, msg):
+    with pytest.raises(pydantic.ValidationError, match=msg):
+        StatedRange.model_validate({**HR_RANGE, **over})
