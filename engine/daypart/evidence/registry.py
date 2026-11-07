@@ -156,7 +156,9 @@ class EvidenceRegistry:
     def for_concept(self, code: str) -> tuple[Source, ...]:
         """Sources that apply to ``code``: a concept_id (``chc:…``) or, with a registry, its LOINC/local code."""
         concept_id = code
-        if not code.startswith("chc:") and self._concepts is not None:
+        if not code.startswith("chc:"):
+            if self._concepts is None:
+                raise ValueError("looking up a code needs a concept registry (use load_evidence())")
             c = self._concepts.by_code(code)
             if c is None:
                 return ()

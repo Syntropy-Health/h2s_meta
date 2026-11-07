@@ -308,3 +308,10 @@ def test_b3_stated_range_copy_is_checked(field, text):
 def test_b5_for_concept_takes_code_by_keyword_as_the_ad_names_it():
     ev = load_evidence()
     assert ev.for_concept(code="8867-4") == ev.for_concept("chc:heart-rate") != ()
+
+
+def test_b6_a_code_without_a_concept_registry_is_refused_not_silently_empty():
+    bare = EvidenceRegistry((Source.model_validate(a_source()),))
+    assert bare.for_concept("chc:heart-rate")  # concept ids need no registry
+    with pytest.raises(ValueError, match="concept registry"):
+        bare.for_concept("8867-4")
