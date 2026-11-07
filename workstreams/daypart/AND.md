@@ -397,12 +397,16 @@ evidence source covers this measure yet"). It is never omitted, and `link` is ne
 ### 4.6 Evidence registry (`evidence/sources_v1.json`)
 
 `Source {evidence_id, title, publisher, url, accessed: date, supports: str (≤200 chars),
-applies_to: [concept_id], vetting: "reviewed: board sign-off 2026-11-07"}`. Only public,
+applies_to: [concept_id], vetting: "reviewed: board sign-off 2026-11-07", stated_ranges:
+[{concept_id, low, high, unit, population, statement}]}`. `statement` is the source page's own
+sentence and contains every stated bound (addendum G22). Only public,
 non-commercial guideline or reference pages (e.g. LOINC.org term pages, WHO or CDC
 physical-activity and sleep guidance). `supports` describes *why a measure is tracked*. AM-1: every
 number in `supports` or in a concept's `reference_range` traces to its source entry (a unit test
 checks each range's `source_evidence_id` resolves and its numbers appear in that entry); a concept
-without a source has `reference_range=null`.
+without a source has `reference_range=null`. A concept's `reference_range` equals the stated range
+of its `source_evidence_id` exactly, and every stated range is carried by its concept; the loader
+refuses anything else. `for_concept` accepts a concept_id or a LOINC/local code.
 
 ### 4.7 Next step
 
