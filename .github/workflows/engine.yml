@@ -27,6 +27,21 @@ jobs:
         run: uv run pytest -q
       - name: I1 — curated-25 never in generated training artifacts
         run: uv run python -m daypart.ci.i1_check
+  typecheck:
+    # Pyright, basic mode, over engine/daypart (HAC-38 G20; config in engine/pyproject.toml).
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: uv sync --locked
+      - name: Pyright (basic)
+        run: uvx pyright@1.1.414 --pythonpath .venv/bin/python
   attribution-boundary:
     runs-on: ubuntu-latest
     steps:
@@ -39,7 +54,7 @@ jobs:
     # Redeploys the hosted demo (FastAPI playground + Streamlit results dashboard) to Modal once the
     # suite passes on the staging trunk (daypart/build) or main. A job here rather than a workflow_run
     # workflow: workflow_run only fires for workflows on the default branch.
-    needs: [test, attribution-boundary]
+    needs: [test, typecheck, attribution-boundary]
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/daypart/build')
     runs-on: ubuntu-latest
     concurrency:
