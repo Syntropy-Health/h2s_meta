@@ -44,11 +44,12 @@ CRISIS_PATTERNS: tuple[tuple[str, str], ...] = (
     ("end", r"(?:end|ending|ended)\s+my\s+(?:own\s+)?life|end(?:ing|ed)?\s+it\s+all"
             r"|(?:take|taking|took)\s+my\s+(?:own\s+)?life"),
     # "end it" only with intent and nothing after it but a time word ("end it tonight", not "end it early").
-    ("end_it", r"(?:going\s+to|gonna|plan(?:ning)?\s+to|want\s+to)\s+end\s+it"
-               r"(?=\s*(?:$|[.,!;?]|tonight|today|now|soon))"),
+    ("end_it", r"(?:going\s+to|gonna|plan(?:ning)?\s+to|want\s+to|wanna|need\s+to|have\s+to)\s+end\s+it"
+               r"(?=\s*(?:$|[.,!;?]|(?:right\s+now|tonight|today|now|soon)(?![\w'-])))"),
     ("kill", r"kill(?:ed|ing|s)?\s+my\s*self"),
     ("not_live", r"(?:don'?t|do\s+not)\s+want\s+to\s+(?:live|be\s+alive)|no\s+reason\s+to\s+live"),
-    ("dead", r"wish\s+i\s+(?:was|were)\s+dead|better\s+off\s+dead"),
+    ("dead", r"wish\s+i\s+(?:was|were)\s+dead|better\s+off\s+dead"
+             r"|wish\s+i\s+(?:wasn'?t|was\s+not|weren'?t|were\s+not)\s+alive"),
     ("pills", r"(?:took|taken|take|taking)\s+too\s+many\s+(?:pills|tablets)|overdos(?:e|ed|es|ing)"),
     ("self_harm", r"self\s*-?\s*harm(?:ing|ed|s)?|(?:hurt|harm|harming|hurting|cut|cutting)\s+my\s*self"),
     ("method", r"hang(?:ing)?\s+my\s*self|jump(?:ing)?\s+off\s+(?:a|the)\s+(?:bridge|building|roof|cliff|balcony)"),
@@ -58,7 +59,8 @@ CRISIS_PATTERNS: tuple[tuple[str, str], ...] = (
     ("not_here", r"(?:don'?t|do\s+not)\s+want\s+to\s+(?:be\s+here\s+any\s*more|exist)"
                  r"|better\s+off\s+(?:without\s+me|gone)|disappear\s+forever"),
     ("no_point", r"no\s+point\s+(?:in\s+)?living|(?:isn'?t|is\s+not|not)\s+worth\s+living|point\s+of\s+living"),
-    ("unsafe", r"(?:i'?m|i\s+am)\s+not\s+safe|(?:can'?t|cannot|can\s+not)\s+keep\s+my\s*self\s+safe"),
+    ("unsafe", r"(?:i'?m|i\s+am)\s+not\s+safe|(?:can'?t|cannot|can\s+not)\s+keep\s+my\s*self\s+safe"
+               r"|i\s+(?:don'?t|do\s+not)\s+feel\s+safe(?=\s*(?:$|[.,!;?]|right\s+now|any\s*more|with\s+my\s*self))"),
     ("cant_go_on", r"(?:can'?t|cannot|can\s+not)\s+go\s+on"),
     ("suicide", r"suicid\w*"),
 )
