@@ -255,3 +255,28 @@ def test_check_reference_ranges_accepts_a_matching_range():
     rr = ReferenceRange(low=60, high=100, unit="/min", population="adults", source_evidence_id="ev:test")
     reg = _registry_with(rr)
     check_reference_ranges(reg, ev)
+
+
+# --- QG P2.1 ------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://localhost./x", "https://foo.local./x", "https://10.0.0.1./x", "https://127.1/x",
+        "https://0x7f.0.0.1/x", "https://0177.0.0.1/x", "https://a.svc/x", "https://k.default.svc.cluster.local/x",
+        "https://h.home.arpa/x", "https://foo.test/x", "https://foo.invalid/x", "https://foo.example/x",
+        "https://127.0.0.1.nip.io/x", "https://10.0.0.1.sslip.io/x", "https://foo.lan/x", "https://foo.corp/x",
+        "https://foo.home/x", "https://foo.localhost/x", "https://foo.LOCAL/x", "https://[::1]/x",
+        "https://8.8.8.8/x", "https://169.254.169.254/x",
+    ],
+)
+def test_f7_url_must_be_a_public_name(url):
+    with pytest.raises(pydantic.ValidationError, match="public"):
+        Source.model_validate(a_source(url=url))
+
+
+def test_f7_shipped_urls_pass_the_hardened_validator():
+    for s in load_evidence().sources:
+        Source.model_validate({**s.model_dump(mode="json"), "url": s.url})
+        assert urlparse(s.url).hostname in {"medlineplus.gov", "www.nhlbi.nih.gov", "www.who.int"}

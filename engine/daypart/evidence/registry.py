@@ -11,7 +11,6 @@ validation only and never appear here.
 
 from __future__ import annotations
 
-import ipaddress
 import json
 import math
 import re
@@ -31,7 +30,12 @@ from daypart.memory.registry import ConceptRegistry, load_registry
 VETTING = "reviewed: board sign-off 2026-11-07"
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 _FORBIDDEN_COPY = ("clinically reviewed", "vetted source")
-_PRIVATE_SUFFIXES = (".local", ".internal", ".lan", ".localhost", ".corp", ".home")
+_PRIVATE_SUFFIXES = (
+    ".local", ".internal", ".lan", ".localhost", ".corp", ".home", ".svc", ".arpa", ".test", ".invalid",
+    ".example", ".intranet", ".private",
+)
+_IP_DNS_SUFFIXES = (".nip.io", ".sslip.io", ".xip.io")  # wildcard DNS that maps a name to an IP
+_NUMERIC_HOST = re.compile(r"^(?:0x[0-9a-f]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|[0-9]+))*$")  # 127.1, 0x7f.0.0.1
 
 
 def _numbers(text: str) -> set[float]:
@@ -97,16 +101,14 @@ class Source(pydantic.BaseModel):
     @classmethod
     def _public_https(cls, v: str) -> str:
         u = urlparse(v)
-        host = (u.hostname or "").lower()
-        if u.scheme != "https" or not host or "." not in host:
+        if u.scheme != "https":
             raise ValueError("url must be a public https page")
-        if host == "localhost" or host.endswith(_PRIVATE_SUFFIXES):
-            raise ValueError("url host is not public")
-        try:
-            ipaddress.ip_address(host)
-        except ValueError:
-            return v
-        raise ValueError("url host must be a public name, not an IP address")
+        host = (u.hostname or "").lower().rstrip(".")
+        if "." not in host or host.endswith(_PRIVATE_SUFFIXES + _IP_DNS_SUFFIXES):
+            raise ValueError("url host is not a public name")
+        if _NUMERIC_HOST.match(host) or ":" in host:
+            raise ValueError("url host must be a public name, not an IP address")
+        return v
 
     @model_validator(mode="after")
     def _check(self) -> Source:
