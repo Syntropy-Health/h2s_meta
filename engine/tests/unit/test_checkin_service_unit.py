@@ -919,3 +919,23 @@ def test_crisis_text_slightly_over_500_still_gets_handoff(cohort):
     text = "x " * 400 + "i want to die"
     assert 500 < len(text) <= service.MAX_RAW_TEXT_CHARS
     assert service.create_checkin(j, text=text)["status"] == "handoff"
+
+
+# --- QG-P1-H1: an extracted date outside the journal window cannot be confirmed -------------------
+
+
+def test_confirm_extracted_date_outside_window_is_unresolved(client):
+    jid, ck = _pending(client, "weight 70 kg on 2025-01-01")
+    assert ck["proposals"][0]["flags"] == ["ambiguous_date"]
+    j = _j(client, jid)
+    snap = _snapshot(j)
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}])
+    assert r.status_code == 422 and r.json()["error"] == "unresolved_flags"
+    assert r.json()["proposals"] == [{"proposal_id": "p-1", "flags": ["ambiguous_date"]}]
+    assert _snapshot(j)[:2] == snap[:2]
+    fixed = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "correct", "date": (TODAY - dt.timedelta(days=3)).isoformat()},
+    ])
+    assert fixed.status_code == 200, fixed.text
+    (event,) = _signals(j)
+    assert event.occurred_at.date() == TODAY - dt.timedelta(days=3)

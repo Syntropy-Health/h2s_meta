@@ -621,3 +621,28 @@ def test_p11_mark_saved_revalidates() -> None:
     forged = CheckIn.model_construct(**{**c.model_dump(), "proposals": (bad,)})
     with pytest.raises(pydantic.ValidationError):
         forged.mark_saved()  # model_copy would have carried the broken invariant into "saved"
+
+
+# ---------------------------------------------------------------- QG-P1-H1: journal window on extracted dates
+
+
+def test_extracted_date_before_window_is_ambiguous() -> None:
+    (p,) = extract("weight 70 kg on 2025-01-01", TODAY)
+    assert p.date == dt.date(2025, 1, 1)
+    assert p.flags == ("ambiguous_date",) and p.blocking
+
+
+def test_extracted_date_at_window_edge_is_not_flagged() -> None:
+    edge = TODAY - timedelta(days=28)
+    (p,) = extract(f"weight 70 kg on {edge.isoformat()}", TODAY)
+    assert p.flags == ()
+
+
+def test_detect_flags_window_needs_today() -> None:
+    (p,) = extract("weight 70 kg", TODAY)
+    old = p.with_changes(date=TODAY - timedelta(days=29))
+    assert detect_flags((old,))[0].flags == ()  # no today: no window check
+    assert detect_flags((old,), today=TODAY)[0].flags == ("ambiguous_date",)
+    corrected = {p.proposal_id: frozenset({"date"})}
+    assert detect_flags((old,), corrected, today=TODAY)[0].flags == ("ambiguous_date",)
+    assert detect_flags((old.with_changes(date=TODAY),), corrected, today=TODAY)[0].flags == ()

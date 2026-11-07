@@ -400,7 +400,7 @@ def extract(text: str, today: dt.date, *, checkin_id: str = "c-0") -> tuple[Prop
                 flags=tuple(sorted(dr.sticky, key=FLAGS.index)),  # type: ignore[arg-type]
             )
         )
-    return _detect(proposals, sticky={p.proposal_id: set(p.flags) for p in proposals})
+    return _detect(proposals, sticky={p.proposal_id: set(p.flags) for p in proposals}, today=today)
 
 
 def _measure(start: int, end: int, order: int, concept: Concept, value: float | None, unit_token: str | None,
@@ -418,10 +418,14 @@ def _measure(start: int, end: int, order: int, concept: Concept, value: float | 
 
 
 _STICKY = frozenset({"unit_assumed", "ambiguous_date"})
+#: The journal window is [today - WINDOW_DAYS, today]; a dated proposal outside it is ambiguous_date.
+WINDOW_DAYS = 28
 _NO_CORRECTIONS: Mapping[str, frozenset[str]] = MappingProxyType({})
 
 
-def _detect(proposals: Iterable[Proposal], sticky: dict[str, set[str]]) -> tuple[Proposal, ...]:
+def _detect(
+    proposals: Iterable[Proposal], sticky: dict[str, set[str]], *, today: dt.date | None = None
+) -> tuple[Proposal, ...]:
     reg = load_registry()
     props = tuple(proposals)
     flags: list[set[str]] = []
@@ -445,6 +449,8 @@ def _detect(proposals: Iterable[Proposal], sticky: dict[str, set[str]]) -> tuple
                     f.add("out_of_plausible_range")
         if p.date is None:
             f.add("ambiguous_date")
+        elif today is not None and not today - dt.timedelta(days=WINDOW_DAYS) <= p.date <= today:
+            f.add("ambiguous_date")  # outside the journal window: the person must pick a date in it
         flags.append(f)
 
     counts = Counter(p.concept_code for p in props if p.concept_code is not None)
@@ -467,7 +473,10 @@ def _detect(proposals: Iterable[Proposal], sticky: dict[str, set[str]]) -> tuple
 
 
 def detect_flags(
-    proposals: Iterable[Proposal], corrected: Mapping[str, frozenset[str]] = _NO_CORRECTIONS
+    proposals: Iterable[Proposal],
+    corrected: Mapping[str, frozenset[str]] = _NO_CORRECTIONS,
+    *,
+    today: dt.date | None = None,
 ) -> tuple[Proposal, ...]:
     """Re-run every flag over a whole (possibly corrected) proposal set, from scratch.
 
@@ -482,7 +491,9 @@ def detect_flags(
     ``unit_assumed`` and ``ambiguous_date`` cannot be re-derived from the values, so they are kept
     from the incoming flags: ``unit_assumed`` clears only when ``"unit"`` is in that id's set and
     ``ambiguous_date`` only when ``"date"`` is (a date-only correction keeps ``unit_assumed``). A
-    missing unit (with a value) or a missing date raises them again regardless. Returns new
+    missing unit (with a value) or a missing date raises them again regardless. With ``today``
+    given, a date outside the journal window ``[today - WINDOW_DAYS, today]`` raises
+    ``ambiguous_date`` too; ``today=None`` skips the window check. Returns new
     proposals with ``blocking`` recomputed.
     """
     props = tuple(proposals)
@@ -495,7 +506,7 @@ def detect_flags(
         if "date" in fields:
             keep.discard("ambiguous_date")
         sticky[p.proposal_id] = keep
-    return _detect(props, sticky=sticky)
+    return _detect(props, sticky=sticky, today=today)
 
 
-__all__ = ["NEAR", "UNKNOWN_WORDS", "detect_flags", "extract"]
+__all__ = ["NEAR", "UNKNOWN_WORDS", "WINDOW_DAYS", "detect_flags", "extract"]

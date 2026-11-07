@@ -27,7 +27,7 @@ from pydantic import ConfigDict, Field
 
 from daypart.checkin import fixtures
 from daypart.checkin.crisis import HANDOFF_TEXT, is_crisis
-from daypart.checkin.extract_text import detect_flags, extract
+from daypart.checkin.extract_text import WINDOW_DAYS, detect_flags, extract
 from daypart.checkin.journal import Journal, ObservationRecord, Provenance
 from daypart.checkin.models import CheckIn, Proposal
 from daypart.checkin.tripwire import scan
@@ -40,7 +40,6 @@ MAX_TEXT_CHARS = 500
 # 18, so normalising an unbounded body blocks the loop). Generous (4x) so crisis wording in a
 # slightly long text still reaches the crisis pre-check and gets the handoff.
 MAX_RAW_TEXT_CHARS = 4 * MAX_TEXT_CHARS
-WINDOW_DAYS = 28
 PII_WARNING = "Do not enter real health data."
 NOTHING_EXTRACTED_HINT = "try e.g. 'slept 7 hours'"
 NOT_A_DEMO_FIXTURE_MESSAGE = "Only the bundled demo files can be used."
@@ -276,7 +275,7 @@ async def review(
         kept = [p for p in edited if by_id[p.proposal_id].action in ("confirm", "correct")]
         corrected = {p.proposal_id: by_id[p.proposal_id].corrected_fields()
                      for p in kept if by_id[p.proposal_id].action == "correct"}
-        reflagged = {p.proposal_id: p for p in detect_flags(kept, corrected)}
+        reflagged = {p.proposal_id: p for p in detect_flags(kept, corrected, today=journal.today)}
         unresolved = [{"proposal_id": pid, "flags": list(p.flags)} for pid, p in reflagged.items() if p.blocking]
         if unresolved:
             raise CheckinError(422, "unresolved_flags", proposals=unresolved)
