@@ -498,3 +498,24 @@ def test_p5_self_name_quiet_on_ordinary_phrases(text: str) -> None:
 @pytest.mark.parametrize("text", ["DOB 01/02/1990", "ＤＯＢ 1990-01-01", "dоb: 1990-01-01", "BORN 3/4/1990"])
 def test_p5_date_of_birth_after_normalisation(text: str) -> None:
     assert "date_of_birth" in scan(text)
+
+
+@pytest.mark.parametrize("text", ["ssn 123 45 6789", "my id is 123.45.6789.", "123-45-6789", "ssn:123 45 6789, thanks"])
+def test_p4_ssn_with_spaces_or_dots_is_national_id(text: str) -> None:
+    assert "national_id" in scan(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "bp 120 80",
+        "bp 120 80 pulse 64",
+        "bp 120 80 8000 steps",
+        "bp 120/80 and 8000 steps",
+        "120 80 64 bpm",
+        "weight 72.5 kg, temp 36.6",
+        "123 45 67",
+    ],
+)
+def test_p4_ssn_quiet_on_measurement_sequences(text: str) -> None:
+    assert "national_id" not in scan(text)

@@ -17,7 +17,12 @@ _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 # ISO dates are masked before the phone scan so "2026-11-03 72.5 kg" never reads as a number run.
 _ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _PHONE = re.compile(r"(?<![\w.])\+?\(?\d[\d \t\-.()]*\d(?![\w])")
-_SSN = re.compile(r"(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])")
+# ddd-dd-dddd with one consistent separator (dash, dot or space). A trailing measurement unit means
+# a reading run ("bp 120 80 8000 steps"), not an id.
+_SSN = re.compile(
+    r"(?<![\d.-])\d{3}([-. ])\d{2}\1\d{4}(?![\d-]|\.\d|[ \t]*(?:%|°|steps?\b|kg\b|kgs\b|lbs?\b|bpm\b|mm\s*hg\b|cm\b|hrs?\b|hours?\b|mins?\b|minutes?\b))",
+    re.IGNORECASE,
+)
 _DIGIT_RUN = re.compile(r"(?<![\d.])(?<!\d\.)\d{9,}(?!\d|\.\d)")
 # Self-name checks. Explicit phrases fire on any following word and run on dsl.normalize() output
 # (casefold, NFKC, confusable and apostrophe fold). "call me" and "I'm" are ambiguous ("call me
