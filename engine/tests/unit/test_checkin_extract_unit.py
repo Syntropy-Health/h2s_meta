@@ -578,6 +578,35 @@ def test_p2_crisis_quiet_on_lookalikes(text: str) -> None:
     assert is_crisis(text) is False
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        # A&D failure row 1: the boundary-v1 crisis vocabulary (crisis_markers) counts too.
+        "I called 988 last night", "988", "had to call emergency services", "I texted the crisis line",
+        "the Crisis Text Line helped", "I had to call 911", "what is the emergency number here",
+        "slept 6 hours, then called 988",
+    ],
+)
+def test_crisis_boundary_markers_detected(text: str) -> None:
+    assert is_crisis(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["walked 988 steps", "weight 98.8 kg", "9880 steps", "slept 6 hours and walked 988 steps today",
+     "988steps", "heart rate 98 bpm"],
+)
+def test_crisis_marker_988_quiet_as_a_measurement(text: str) -> None:
+    assert is_crisis(text) is False
+
+
+def test_crisis_markers_come_from_the_rule_pack() -> None:
+    from daypart.checkin.crisis import CRISIS_MARKERS
+    from daypart.membrane.dsl import RULE_VERSION, load_rules
+
+    assert CRISIS_MARKERS == tuple(load_rules(RULE_VERSION).crisis_markers)
+
+
 @pytest.mark.parametrize("text", ["my bp was 120/80.", "bp 120/80, slept 6 hours", "(bp 120/80)", "bp 120/80!"])
 def test_p7_bp_pair_before_sentence_punctuation(text: str) -> None:
     props = extract(text, TODAY)
