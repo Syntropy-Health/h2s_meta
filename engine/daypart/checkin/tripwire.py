@@ -29,7 +29,8 @@ _DATE = (
 )
 _DOB = re.compile(
     rf"\b(?:born\s+(?:on|in)|dob|d\.o\.b\.?|date\s+of\s+birth|birthday)\b"
-    rf"(?:\s*[:=-]?\s*(?:is|was|on|in)\b)*\s*[:=-]?\s*{_DATE}",
+    # Atomic and bounded: an unbounded ``(?:\s*…(?:is|was|on|in)\b)*`` backtracks exponentially.
+    rf"(?>\s*+[:=-]?\s*+(?:is|was|on|in)\b){{0,3}}\s*+[:=-]?\s*{_DATE}",
     re.IGNORECASE,
 )
 

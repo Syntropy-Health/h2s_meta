@@ -7,6 +7,7 @@ crisis pre-check. Synthetic inputs only.
 from __future__ import annotations
 
 import datetime as dt
+import time
 from datetime import timedelta
 
 import pydantic
@@ -418,3 +419,30 @@ def test_handoff_text_passes_both_gates() -> None:
     assert "emergency services" in HANDOFF_TEXT
     assert safe_text(HANDOFF_TEXT) == HANDOFF_TEXT
     assert dsl.check(HANDOFF_TEXT, crisis_context=True).passed is True
+
+
+# ---------------------------------------------------------------- QG P1.3 fixes
+
+_PATHOLOGICAL = [
+    pytest.param(("dob" + " is" * 166 + "x")[:500], id="dob-repeated-is"),
+    pytest.param(("born on" + " in" * 166 + "x")[:500], id="born-repeated-in"),
+    pytest.param(("date of birth" + " was" * 125 + "!")[:500], id="dob-repeated-was"),
+    pytest.param(("dob" + ": is -" * 100)[:500], id="dob-separators"),
+    pytest.param(("1 " * 250)[:500], id="digits-spaces"),
+    pytest.param(("1-" * 249 + "x")[:500], id="digits-dashes"),
+    pytest.param(("1." * 249 + "x")[:500], id="digits-dots"),
+    pytest.param(("12/" * 167)[:500], id="digits-slashes"),
+    pytest.param(("my name " * 63)[:500], id="repeated-my-name"),
+    pytest.param(("a." * 250)[:499] + "@", id="email-ish"),
+]
+
+
+@pytest.mark.parametrize("text", _PATHOLOGICAL)
+def test_p1_regexes_are_linear_on_pathological_input(text: str) -> None:
+    assert len(text) <= 500
+    t0 = time.perf_counter()
+    scan(text)
+    assert time.perf_counter() - t0 < 0.2
+    t0 = time.perf_counter()
+    extract(text, TODAY)
+    assert time.perf_counter() - t0 < 0.2
