@@ -79,7 +79,7 @@ sequenceDiagram
    A persistent banner on every screen reads "Demo mode: synthetic inputs and simulated results".
 
 **In scope:** R1–R11 as specified below. **Out of scope:** real data collection, enabling
-real-input mode, clinical decision support or ranges, EHR integration, GRPO or any new training, a
+real-input mode, clinical decision support or interpretation of ranges (AM-1), EHR integration, GRPO or any new training, a
 new eval environment (HAC-16), ontology beyond the A4 slice, voice and video, and accounts.
 
 **Success criteria** (carried from the PVR; `/human-qa` checks against these):
@@ -87,8 +87,8 @@ new eval environment (HAC-16), ontology beyond the A4 slice, voice and video, an
    with synthetic data and no dead ends.
 2. SC2 (G2): 100% of passport cards show source, time, provenance and observed/simulated status,
    and either evidence or "not enough evidence".
-3. SC3 (G3): automated tests find 0 clinical ranges, 0 fabricated numbers and 0 real-input copy in
-   demo mode.
+3. SC3 (G3, AM-1): automated tests find 0 *unsourced* ranges, 0 fabricated numbers and 0 real-input
+   copy in demo mode.
 4. SC4 (G4): every learning-lab number links to a run ID, split, seed and failure count derived
    from a committed artefact. Any missing field shows "not recorded".
 5. SC5 (G5): the I1 builder check stays green in CI.
@@ -113,6 +113,13 @@ new eval environment (HAC-16), ontology beyond the A4 slice, voice and video, an
   it. GRPO is "proposed, not built". The rename recommendation is UI and docs only.
   UIUX owns the visual design. Do not open a board question; the CTO briefs the blueprint review.
 - 2026-11-06 (CTO, HAC-33 description): the repo is now public. Synthetic data only.
+- 2026-11-07 (board, HAC-30 interaction 10605fe7; applied by the CTO as AM-1 on HAC-38): A1 as the
+  default (Challenge 09 primary, 04 and 05 supporting). A3: "sign off as reviewed. use best effort &
+  supported research for numerical ranges. Define them where possible." So: `reviewer_status` and
+  evidence `vetting` read `"reviewed: board sign-off 2026-11-07"` (never "clinically reviewed", no clinician named);
+  a concept may carry `reference_range` only where a source in `sources_v1.json` states the numbers,
+  otherwise `null` ("no reference range"); a range is shown beside the value with its population and
+  source and is never interpreted (A2 holds); `plausible` stays validation-only and is never rendered.
 
 ## Agent assumptions
 
@@ -140,8 +147,8 @@ blueprint review.
   `memory/loinc_verify_v1.csv`, and a unit test (T5.6) pins the registry to it. LOINC is used under
   its licence, and the copyright notice goes in ATTRIBUTION, the UI footer and the submission pack.
 - D-A6. **Evidence registry entries are agent-curated public sources**, marked
-  `vetting: "agent draft, not clinically reviewed"` (A3: no clinician). The copy never says
-  "vetted sources" while A3 holds. The phrase "Your real input, evaluation from vetted sources" is
+  `vetting: "reviewed: board sign-off 2026-11-07"` (AM-1; no clinician, so the copy never says "clinically reviewed"). The copy
+  never says "vetted sources" while demo mode is on (R1). The phrase "Your real input, evaluation from vetted sources" is
   doubly impossible: demo mode is on, and no entry is clinically vetted.
 - D-A7. **A PII tripwire on free text.** Check-in text that looks like personal data (an e-mail
   address, a phone number, a national-ID-like number, "my name is", a date of birth) is refused
@@ -271,7 +278,7 @@ Journal
 unmapped) is
 `{record_id, event_id|None (None iff unmapped), concept_id, loinc_code|None, loinc_version|None, display, value, unit, value_type,
 observed_at, provenance:{source_kind, source_ref, checkin_id, method}, quality:"confirmed"|"corrected",
-status:"mapped"|"unmapped", reviewer_status:"draft, not clinically reviewed", allowed_use}`.
+status:"mapped"|"unmapped", reviewer_status:"reviewed: board sign-off 2026-11-07", allowed_use}`.
 
 **Invariants.**
 - J1. `events` only receives `SignalEvent`s produced by `review()` for `confirm`/`correct`
@@ -298,7 +305,9 @@ Concept
   value_type: "quantity" | "integer" | "ordinal"
   plausible: (lo, hi)              # input validation only; NEVER rendered (no clinical ranges)
   keywords: tuple[str, ...]        # extractor lexicon
-  reviewer_status: "draft, not clinically reviewed"   # the only value while A3 holds
+  reviewer_status: "reviewed: board sign-off 2026-11-07"   # AM-1; the only value
+  reference_range: {low, high, unit, population, source_evidence_id} | null   # AM-1: only where a
+                                   # sources_v1.json entry states the numbers; never derived or rendered as a judgement
   allowed_use: "demo display of self-reported or simulated values; no interpretation"
 ```
 
@@ -373,11 +382,12 @@ evidence source covers this measure yet"). It is never omitted, and `link` is ne
 ### 4.6 Evidence registry (`evidence/sources_v1.json`)
 
 `Source {evidence_id, title, publisher, url, accessed: date, supports: str (≤200 chars),
-applies_to: [concept_id], vetting: "agent draft, not clinically reviewed"}`. Only public,
+applies_to: [concept_id], vetting: "reviewed: board sign-off 2026-11-07"}`. Only public,
 non-commercial guideline or reference pages (e.g. LOINC.org term pages, WHO or CDC
-physical-activity and sleep guidance). `supports` describes *why a measure is tracked*, never a
-target or range. A unit test rejects any `supports` text that contains a digit followed by a unit
-of the concept (no ranges by construction).
+physical-activity and sleep guidance). `supports` describes *why a measure is tracked*. AM-1: every
+number in `supports` or in a concept's `reference_range` traces to its source entry (a unit test
+checks each range's `source_evidence_id` resolves and its numbers appear in that entry); a concept
+without a source has `reference_range=null`.
 
 ### 4.7 Next step
 
@@ -546,7 +556,8 @@ Tests marked **[sealed]** are the Test Author's contract and are written from th
   `loinc_verify_v1.csv`. `ATTRIBUTION.md`, the UI footer and `submission/README.md` carry the LOINC
   copyright notice and licence link.
 - T5.2 [sealed] every A4 concept has all of: concept_id, code, loinc_version (non-null for LOINC),
-  display, unit, value_type, reviewer_status == "draft, not clinically reviewed", allowed_use.
+  display, unit, value_type, reviewer_status == "reviewed: board sign-off 2026-11-07", allowed_use,
+  and the key `reference_range` (null unless sourced; AM-1).
   The 3 verticals have ≥4 concepts each, and the LOINC count is between 15 and 25.
 - T5.3 [sealed] `GET /api/journals/{j}/observations/{record_id}` returns every R5 field for a
   confirmed value and for a `save_unmapped` value (that one has `status="unmapped"`,
@@ -569,7 +580,8 @@ Tests marked **[sealed]** are the Test Author's contract and are written from th
   value byte for byte, with no interval or score field; a concept whose latest value is older
   than 14 days → withheld; a pattern card for a node that `is_ready` rejects → withheld.
 - T6.5 [sealed] the serialized passport passes `assert_narration_safe` on every string, and
-  `dsl.check` finds no diagnosis, treatment or dosing hits; no `plausible`/range numbers appear.
+  `dsl.check` finds no diagnosis, treatment or dosing hits; no `plausible` numbers appear, and every
+  rendered range number has a `source_evidence_id` that resolves (AM-1).
 
 **R7: next step**
 - T7.1 [sealed] after a saved check-in, `GET next-step` → text, a non-empty reason, and options ==
