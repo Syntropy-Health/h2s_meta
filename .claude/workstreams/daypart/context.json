@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "workstream": "daypart",
-  "updated_at": "2026-11-07T02:32:16.129380+00:00",
+  "updated_at": "2026-11-07T02:54:45.084483+00:00",
   "linear": {
     "initiative_url": "",
     "initiative_id": ""
@@ -65,6 +65,18 @@
       "summary": "pyright basic CI (G20) + typed extractor boundary (G21)",
       "pr": "",
       "updated_at": "2026-11-07T02:32:16.129349+00:00"
+    },
+    "P2.1": {
+      "status": "done",
+      "artifact": "",
+      "linear": "",
+      "paperclip": "",
+      "gh": "",
+      "commit": "24831e4",
+      "qgr": "workstreams/daypart/qgr/h2s_meta-unknown-worktree-agent-daypart-h2s_meta-qgr-iteration-complete-20261107-0254-8430ac7.md",
+      "summary": "evidence registry sources_v1 + 7 sourced reference ranges (AM-1, G22)",
+      "pr": "",
+      "updated_at": "2026-11-07T02:54:45.084451+00:00"
     }
   }
 }
