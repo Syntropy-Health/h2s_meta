@@ -554,3 +554,15 @@ def test_p2_crisis_families_detected(text: str) -> None:
 )
 def test_p2_crisis_quiet_on_lookalikes(text: str) -> None:
     assert is_crisis(text) is False
+
+
+@pytest.mark.parametrize("text", ["my bp was 120/80.", "bp 120/80, slept 6 hours", "(bp 120/80)", "bp 120/80!"])
+def test_p7_bp_pair_before_sentence_punctuation(text: str) -> None:
+    props = extract(text, TODAY)
+    assert _one(props, "8480-6").value == 120.0
+    assert _one(props, "8462-4").value == 80.0
+
+
+def test_p7_bp_pair_still_rejects_decimals() -> None:
+    props = extract("bp 120/80.5", TODAY)
+    assert not _by_code(props, "8462-4")

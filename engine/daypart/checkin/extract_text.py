@@ -69,7 +69,7 @@ _UNIT_RES = tuple((re.compile(r"\s*(?:" + p + ")"), u) for p, u in _UNIT_PATTERN
 _UNIT_EQUIV: dict[str, dict[str, str]] = {"41950-7": {"{steps}": "{steps}/(24.h)"}}
 
 _NUMBER = re.compile(r"(?<![\w.,/-])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(?![\d])")
-_BP_PAIR = re.compile(r"(?<![\w.,/-])([1-9]\d{1,2})\s*/\s*([1-9]\d{1,2})(?![\d.]|\s*/)")
+_BP_PAIR = re.compile(r"(?<![\w.,/-])([1-9]\d{1,2})\s*/\s*([1-9]\d{1,2})(?!\d|\.\d|\s*/)")
 
 _MONTHS = {
     "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3, "apr": 4, "april": 4,
