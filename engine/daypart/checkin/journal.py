@@ -58,6 +58,10 @@ class UnknownJournal(JournalError):
     error = "unknown_journal"
 
 
+class UnknownCheckin(JournalError):
+    error = "unknown_checkin"
+
+
 class Provenance(pydantic.BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -154,13 +158,22 @@ class JournalStore:
         self.max_journals = max_journals
         self.idle_seconds = idle_seconds
         self._journals: OrderedDict[str, Journal] = OrderedDict()
+        # checkin_id -> journal_id, so POST /api/checkins/{id}/review needs only the check-in id
+        # (A&D API table). Entries are registered on create and dropped when the journal is evicted.
+        self._checkin_journal: dict[str, str] = {}
 
     def __len__(self) -> int:
         return len(self._journals)
 
+    def _drop(self, journal: Journal) -> None:
+        self._journals.pop(journal.journal_id, None)
+        for cid in journal.checkins:
+            if self._checkin_journal.get(cid) == journal.journal_id:
+                del self._checkin_journal[cid]
+
     def _evict_idle(self, now: float) -> None:
-        for jid in [k for k, j in self._journals.items() if now - j.last_seen > self.idle_seconds]:
-            del self._journals[jid]
+        for j in [j for j in self._journals.values() if now - j.last_seen > self.idle_seconds]:
+            self._drop(j)
 
     def create(self, member_id: object) -> Journal:
         """A fresh journal for a ``syn-`` training member; curated, unknown or malformed ids -> UnknownMember."""
@@ -170,8 +183,13 @@ class JournalStore:
         self._evict_idle(now)
         ontology = slice_ontology()
         events = EventLog(ontology)
+        # Check-in and event ids carry the first 8 hex digits; keep that prefix unique among live journals.
+        prefixes = {k[:8] for k in self._journals}
+        journal_id = uuid.uuid4().hex
+        while journal_id[:8] in prefixes:  # pragma: no cover - a 1-in-4-billion collision
+            journal_id = uuid.uuid4().hex
         journal = Journal(
-            journal_id=uuid.uuid4().hex,
+            journal_id=journal_id,
             member=self._members[member_id],
             ontology=ontology,
             events=events,
@@ -180,7 +198,7 @@ class JournalStore:
         )
         self._journals[journal.journal_id] = journal
         while len(self._journals) > self.max_journals:
-            self._journals.popitem(last=False)
+            self._drop(next(iter(self._journals.values())))
         return journal
 
     def get(self, journal_id: object) -> Journal:
@@ -194,6 +212,24 @@ class JournalStore:
         self._journals.move_to_end(journal.journal_id)
         return journal
 
+    def register_checkin(self, checkin_id: str, journal: Journal) -> None:
+        """Record which live journal owns ``checkin_id`` (called once the check-in is stored)."""
+        if self._journals.get(journal.journal_id) is not journal:
+            raise UnknownJournal(journal.journal_id)
+        self._checkin_journal[checkin_id] = journal.journal_id
+
+    def checkin_owner(self, checkin_id: object) -> str | None:
+        """The journal id that owns ``checkin_id``, or None when unknown or evicted."""
+        return self._checkin_journal.get(checkin_id) if isinstance(checkin_id, str) else None
+
+    def journal_for_checkin(self, checkin_id: object) -> Journal:
+        """The live journal owning ``checkin_id``: UnknownCheckin if never registered, UnknownJournal if
+        its journal has since expired (the owner is read before idle eviction runs)."""
+        owner = self.checkin_owner(checkin_id)
+        if owner is None:
+            raise UnknownCheckin(str(checkin_id))
+        return self.get(owner)
+
 
 __all__ = [
     "DEFAULT_TODAY",
@@ -204,6 +240,7 @@ __all__ = [
     "JournalStore",
     "ObservationRecord",
     "Provenance",
+    "UnknownCheckin",
     "UnknownJournal",
     "UnknownMember",
 ]

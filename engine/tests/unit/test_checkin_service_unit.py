@@ -19,6 +19,7 @@ from daypart.checkin import service
 from daypart.checkin.crisis import HANDOFF_TEXT
 from daypart.checkin.fixtures import MAX_UPLOAD_BYTES, fixture_bytes, manifest
 from daypart.checkin.journal import (
+    JournalError,
     JournalStore,
     ObservationRecord,
     UnknownJournal,
@@ -79,8 +80,10 @@ def _upload(client, jid, data, name="upload.bin", ctype="application/octet-strea
     return client.post("/api/checkins", data={"journal_id": jid}, files={"file": (name, data, ctype)})
 
 
-def _review(client, jid, cid, decisions):
-    return client.post(f"/api/checkins/{cid}/review", json={"journal_id": jid, "decisions": decisions})
+def _review(client, cid, decisions, journal_id=None):
+    """The A&D-shaped review body ``{"decisions": [...]}``; ``journal_id`` is optional."""
+    body = {"decisions": decisions} if journal_id is None else {"journal_id": journal_id, "decisions": decisions}
+    return client.post(f"/api/checkins/{cid}/review", json=body)
 
 
 def _pending(client, text, member_id="syn-001"):
@@ -160,7 +163,7 @@ def test_unknown_journal_404_on_every_journal_route(client):
     ghost = "f" * 32
     for r in (
         _text(client, ghost, "slept 6 hours"),
-        _review(client, ghost, "c-1", []),
+        _review(client, "c-1", [], journal_id=ghost),
         client.get(f"/api/journals/{ghost}/observations/obs-1"),
     ):
         assert r.status_code == 404
@@ -258,7 +261,7 @@ def test_t3_1_each_fixture_id_and_upload_201_and_correctable(client, fixture_id)
             concept = load_registry().by_code(p["concept_code"])
             decisions.append({"proposal_id": p["proposal_id"], "action": "correct",
                               "value": p["value"], "unit": concept.unit})
-    rr = _review(client, jid, body["checkin_id"], decisions)
+    rr = _review(client, body["checkin_id"], decisions)
     assert rr.status_code == 200, rr.text
 
     data, media = fixture_bytes(fixture_id)
@@ -336,7 +339,7 @@ def test_t4_2_confirm_blocking_refused_nothing_written(client):
     jid, ck = _pending(client, "slept 6 hours and weighed 160")
     j = _j(client, jid)
     snap = _snapshot(j)
-    r = _review(client, jid, ck["checkin_id"], [
+    r = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "confirm"},
         {"proposal_id": "p-2", "action": "confirm"},
     ])
@@ -349,7 +352,7 @@ def test_t4_2_confirm_blocking_refused_nothing_written(client):
 
 def test_t4_2_correct_with_valid_values_200(client):
     jid, ck = _pending(client, "slept 30 hours")
-    r = _review(client, jid, ck["checkin_id"], [{"proposal_id": "p-1", "action": "correct", "value": 7}])
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "correct", "value": 7}])
     assert r.status_code == 200, r.text
     j = _j(client, jid)
     (event,) = _signals(j)
@@ -360,12 +363,12 @@ def test_t4_2_correct_with_valid_values_200(client):
 
 def test_contradiction_cleared_by_discarding_one_side(client):
     jid, ck = _pending(client, "slept 6 hours and slept 7 hours")
-    bad = _review(client, jid, ck["checkin_id"], [
+    bad = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "confirm"},
         {"proposal_id": "p-2", "action": "correct", "value": 6},
     ])
     assert bad.status_code == 422 and bad.json()["error"] == "unresolved_flags"
-    ok = _review(client, jid, ck["checkin_id"], [
+    ok = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "confirm"},
         {"proposal_id": "p-2", "action": "discard"},
     ])
@@ -375,7 +378,7 @@ def test_contradiction_cleared_by_discarding_one_side(client):
 
 def test_t4_2_save_unmapped_no_signal_event(client):
     jid, ck = _pending(client, "headache")
-    r = _review(client, jid, ck["checkin_id"], [{"proposal_id": "p-1", "action": "save_unmapped"}])
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "save_unmapped"}])
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["written"] == [] and len(body["records"]) == 1
@@ -387,7 +390,7 @@ def test_t4_2_save_unmapped_no_signal_event(client):
 
 def test_save_unmapped_allowed_on_blocking_known_concept(client):
     jid, ck = _pending(client, "weighed 160")
-    r = _review(client, jid, ck["checkin_id"], [{"proposal_id": "p-1", "action": "save_unmapped"}])
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "save_unmapped"}])
     assert r.status_code == 200
     j = _j(client, jid)
     assert len(j.events) == 0
@@ -398,7 +401,7 @@ def test_save_unmapped_allowed_on_blocking_known_concept(client):
 
 def test_t4_3_discard_leaves_no_trace(client):
     jid, ck = _pending(client, "slept 6 hours and walked 8000 steps")
-    r = _review(client, jid, ck["checkin_id"], [
+    r = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "confirm"},
         {"proposal_id": "p-2", "action": "discard"},
     ])
@@ -413,7 +416,7 @@ def test_t4_4_confirm_one_of_two_then_409(client):
     jid, ck = _pending(client, "slept 6 hours and walked 8000 steps")
     j = _j(client, jid)
     decisions = [{"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "discard"}]
-    r = _review(client, jid, ck["checkin_id"], decisions)
+    r = _review(client, ck["checkin_id"], decisions)
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "saved" and len(body["written"]) == 1 and body["discarded"] == ["p-2"]
@@ -422,7 +425,7 @@ def test_t4_4_confirm_one_of_two_then_409(client):
     assert event.event_id == body["written"][0] == f"{jid[:8]}-e1"
     assert event.member_id == "syn-001"
     assert event.occurred_at == dt.datetime.combine(TODAY, dt.time(12), tzinfo=dt.UTC)
-    again = _review(client, jid, ck["checkin_id"], decisions)
+    again = _review(client, ck["checkin_id"], decisions)
     assert again.status_code == 409 and again.json()["error"] == "already_saved"
     assert len(j.events) == 1 and j.checkins[ck["checkin_id"]].status == "saved"
 
@@ -447,9 +450,45 @@ async def test_t4_5_concurrent_double_review_one_write(cohort):
 def test_review_unknown_checkin_or_other_journal_404(client):
     jid, ck = _pending(client, "slept 6 hours")
     other = _journal(client)
-    for j_, cid in ((jid, "nope"), (other, ck["checkin_id"])):
-        r = _review(client, j_, cid, [{"proposal_id": "p-1", "action": "confirm"}])
+    decisions = [{"proposal_id": "p-1", "action": "confirm"}]
+    for j_, cid in ((jid, "nope"), (other, ck["checkin_id"]), (None, "nope")):
+        r = _review(client, cid, decisions, journal_id=j_)
         assert r.status_code == 404 and r.json()["error"] == "unknown_checkin"
+    assert _j(client, jid).checkins[ck["checkin_id"]].status == "pending_review"
+
+
+def test_review_spec_body_without_journal_id_resolves_the_journal(client):
+    jid, ck = _pending(client, "slept 6 hours")
+    r = client.post(f"/api/checkins/{ck['checkin_id']}/review",
+                    json={"decisions": [{"proposal_id": "p-1", "action": "confirm"}]})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "saved" and len(_signals(_j(client, jid))) == 1
+
+
+def test_review_optional_journal_id_that_matches_is_accepted(client):
+    jid, ck = _pending(client, "slept 6 hours")
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}], journal_id=jid)
+    assert r.status_code == 200, r.text
+
+
+def test_store_checkin_map_registered_and_dropped_on_eviction(cohort):
+    now = [0.0]
+    store = JournalStore(cohort, clock=lambda: now[0], idle_seconds=10, max_journals=1)
+    a = store.create("syn-001")
+    ck = service.create_checkin(a, text="slept 6 hours")
+    store.register_checkin(ck["checkin_id"], a)
+    assert store.journal_for_checkin(ck["checkin_id"]) is a
+    now[0] += 11  # idle: resolving the check-in finds its journal gone
+    with pytest.raises(UnknownJournal):
+        store.journal_for_checkin(ck["checkin_id"])
+    b = store.create("syn-002")
+    ckb = service.create_checkin(b, text="slept 6 hours")
+    store.register_checkin(ckb["checkin_id"], b)
+    store.create("syn-003")  # LRU evicts b and its check-in entry
+    with pytest.raises(JournalError) as e:
+        store.journal_for_checkin(ckb["checkin_id"])
+    assert e.value.status == 404 and e.value.body["error"] in ("unknown_checkin", "unknown_journal")
+    assert store.checkin_owner(ck["checkin_id"]) is None and store.checkin_owner(ckb["checkin_id"]) is None
 
 
 @pytest.mark.parametrize("decisions,field", [
@@ -463,7 +502,7 @@ def test_missing_duplicate_unknown_decisions_refused(client, decisions, field):
     jid, ck = _pending(client, "slept 6 hours and walked 8000 steps")
     j = _j(client, jid)
     snap = _snapshot(j)
-    r = _review(client, jid, ck["checkin_id"], decisions)
+    r = _review(client, ck["checkin_id"], decisions)
     assert r.status_code == 422
     body = r.json()
     assert body["error"] == "missing_decision"
@@ -473,7 +512,7 @@ def test_missing_duplicate_unknown_decisions_refused(client, decisions, field):
 
 def test_lb_correction_records_as_entered_and_converts_event(client):
     jid, ck = _pending(client, "weighed 160")
-    r = _review(client, jid, ck["checkin_id"], [
+    r = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "correct", "unit": "[lb_av]"},
     ])
     assert r.status_code == 200, r.text
@@ -499,7 +538,7 @@ def test_invalid_correction_refused_without_bounds(client, correction, reason):
     jid, ck = _pending(client, "weighed 160")
     j = _j(client, jid)
     snap = _snapshot(j)
-    r = _review(client, jid, ck["checkin_id"], [{"proposal_id": "p-1", "action": "correct", **correction}])
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "correct", **correction}])
     assert r.status_code == 422
     body = r.json()
     assert body["error"] == "invalid_correction"
@@ -511,7 +550,7 @@ def test_invalid_correction_refused_without_bounds(client, correction, reason):
 
 def test_correction_at_window_edge_accepted(client):
     jid, ck = _pending(client, "weighed 160")
-    r = _review(client, jid, ck["checkin_id"], [{
+    r = _review(client, ck["checkin_id"], [{
         "proposal_id": "p-1", "action": "correct", "unit": "kg",
         "date": (TODAY - dt.timedelta(days=28)).isoformat(),
     }])
@@ -522,7 +561,7 @@ def test_correction_at_window_edge_accepted(client):
 
 def test_correct_on_unknown_concept_is_invalid(client):
     jid, ck = _pending(client, "headache")
-    r = _review(client, jid, ck["checkin_id"], [{"proposal_id": "p-1", "action": "correct", "value": 3}])
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "correct", "value": 3}])
     assert r.status_code == 422 and r.json()["error"] == "invalid_correction"
 
 
@@ -534,7 +573,7 @@ def test_event_log_value_error_maps_to_invalid_correction_without_message(client
         raise ValueError("internal detail range [0.0, 100000.0]")
 
     monkeypatch.setattr(j.events, "append", boom)
-    r = _review(client, jid, ck["checkin_id"], [
+    r = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "confirm"},
     ])
     assert r.status_code == 422 and r.json()["error"] == "invalid_correction"
@@ -549,7 +588,7 @@ def test_event_log_value_error_maps_to_invalid_correction_without_message(client
 
 def test_t5_3_observation_records_confirmed_and_unmapped(client):
     jid, ck = _pending(client, "slept 6 hours and headache")
-    r = _review(client, jid, ck["checkin_id"], [
+    r = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "confirm"},
         {"proposal_id": "p-2", "action": "save_unmapped"},
     ])
@@ -683,15 +722,15 @@ def test_t5_5_no_plausible_bound_in_any_p1_response(client):
          {"proposal_id": "p-2", "action": "correct", "value": 7, "unit": "furlong"},
          {"proposal_id": "p-3", "action": "save_unmapped"}],
     ):
-        keep(_review(client, jid, cid, decisions))
-    ok = keep(_review(client, jid, cid, [
+        keep(_review(client, cid, decisions))
+    ok = keep(_review(client, cid, [
         {"proposal_id": "p-1", "action": "correct", "unit": "[lb_av]"},
         {"proposal_id": "p-2", "action": "correct", "value": 7},
         {"proposal_id": "p-3", "action": "save_unmapped"},
     ]))
     assert ok.status_code == 200, ok.text
-    keep(_review(client, jid, cid, []))
-    keep(_review(client, jid, "nope", []))
+    keep(_review(client, cid, []))
+    keep(_review(client, "nope", []))
     for rid in ok.json()["records"]:
         keep(client.get(f"/api/journals/{jid}/observations/{rid}"))
     keep(client.get(f"/api/journals/{jid}/observations/obs-999"))
@@ -705,7 +744,7 @@ def test_t5_5_no_plausible_bound_in_any_p1_response(client):
 
 def test_signal_events_are_free_text_free(client):
     jid, ck = _pending(client, "slept 6 hours")
-    _review(client, jid, ck["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}])
+    _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}])
     (event,) = _signals(_j(client, jid))
     assert isinstance(event, SignalEvent)
     assert set(event.model_dump()) == {"kind", "event_id", "member_id", "occurred_at", "code", "value"}

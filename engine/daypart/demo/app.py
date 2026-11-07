@@ -294,21 +294,29 @@ def create_app(cohort_seed: int = 0, results_url: str | None = None) -> FastAPI:
                 )
             except service.CheckinError as e:
                 return _error(e.status, e.body)
+            if out["status"] == "pending_review":
+                journals.register_checkin(out["checkin_id"], j)
         return JSONResponse(status_code=200 if out["status"] == "handoff" else 201, content=_safe(out))
 
     @app.post("/api/checkins/{checkin_id}/review")
     async def review_checkin(checkin_id: str, request: Request) -> Response:
-        # Check-in ids are scoped to their journal: the body must carry journal_id, and the check-in
-        # is looked up only inside that journal (no global checkin_id -> journal_id map to keep in
-        # sync with eviction). A check-in id from another journal is a 404.
+        # A&D body: {"decisions": [...]}. The journal is resolved from the store's checkin_id ->
+        # journal_id map. An optional journal_id must name a live journal that owns the check-in,
+        # else 404 unknown_checkin; a check-in whose journal expired is 404 unknown_journal.
         try:
             body = await _json_object(request)
         except _BodyTooLarge:
             return _error(413, {"error": "too_large"})
         if body is None:
             return _error(422, {"error": "invalid_request"})
+        owner = journals.checkin_owner(checkin_id)  # read before any idle eviction
         try:
-            j = _journal(body.get("journal_id"))
+            if "journal_id" in body and body["journal_id"] is not None:
+                j = _journal(body["journal_id"])
+                if owner != j.journal_id:
+                    return _error(404, {"error": "unknown_checkin"})
+            else:
+                j = journals.journal_for_checkin(checkin_id)
         except JournalError as e:
             return _error(e.status, e.body)
         decisions = body.get("decisions")
