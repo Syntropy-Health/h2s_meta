@@ -234,7 +234,8 @@ def test_detect_flags_clears_contradiction_after_correction() -> None:
 
 
 def test_detect_flags_clears_bp_contradiction_when_corrected() -> None:
-    props = extract("bp 80/120", TODAY)
+    props = extract("bp 80/120 mmhg", TODAY)
+    assert all(p.flags == ("contradiction",) for p in props)
     swapped = tuple(
         p.model_copy(update={"value": 120.0 if p.concept_code == "8480-6" else 80.0}) for p in props
     )
