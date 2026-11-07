@@ -358,3 +358,15 @@ def test_f2_a_range_that_differs_from_its_stated_range_is_refused(rr_over):
                                            "source_evidence_id": "ev:test", **rr_over})
     with pytest.raises(ValueError, match="chc:heart-rate: reference_range is not stated by ev:test"):
         check_reference_ranges(_registry_with(rr), EvidenceRegistry((_hr_source(),)))
+
+
+@pytest.mark.parametrize(
+    ("over", "msg"),
+    [
+        ({"applies_to": ["chc:heart-rate", "chc:heart-rate"]}, "duplicates"),
+        ({"stated_ranges": [HR_RANGE, HR_RANGE]}, "two stated ranges"),
+    ],
+)
+def test_f3_duplicate_applies_to_and_ranges(over, msg):
+    with pytest.raises(pydantic.ValidationError, match=msg):
+        Source.model_validate(a_source(**over))
