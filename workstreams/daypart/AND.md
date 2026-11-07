@@ -256,7 +256,9 @@ carries the blocking flag `unit_assumed`, so an assumed unit can never be confir
 blocking; there are no "soft" flags. `review()` applies all `correct` edits first, then **re-runs
 flag detection over the whole post-correction set** (contradiction is a set property). A
 correction clears a flag only if the re-run no longer raises it, so correcting one side of a
-contradiction clears both when they no longer conflict. `unit_assumed` clears when `correct`
+systolic ≤ diastolic contradiction clears both when they no longer conflict. Discarded and
+`save_unmapped` proposals stay in the re-run set (G17), so two values for one concept are resolved
+by discarding both (or saving them unmapped) and checking in again. `unit_assumed` clears when `correct`
 states a unit explicitly.
 
 ### 4.2 Journal (per visitor, `checkin/journal.py`)
@@ -303,7 +305,7 @@ Concept
   vertical: "vitals_body" | "behaviour_function" | "symptoms_wellbeing"
   unit: str (UCUM); alt_units: {unit: factor}   # e.g. lb→kg; conversion is a correction suggestion
   value_type: "quantity" | "integer" | "ordinal"
-  plausible: (lo, hi)              # input validation only; NEVER rendered (no clinical ranges)
+  plausible: (lo, hi)              # input validation only; NEVER rendered; not a reference range
   keywords: tuple[str, ...]        # extractor lexicon
   reviewer_status: "reviewed: board sign-off 2026-11-07"   # AM-1; the only value
   reference_range: {low, high, unit, population, source_evidence_id} | null   # AM-1: only where a
@@ -658,9 +660,9 @@ Critical path: P1 → P2 → P3 tasks 11 and 12. UIUX task 10 runs in parallel w
 
 ## Open questions
 
-1. PVR A1 (Challenge 09 primary) and A3 (no clinician reviewer) are pending on the HAC-30
-   interaction (brief HAC-31). The design works under both defaults. A named clinician would only
-   change `reviewer_status` values and the evidence `vetting` label.
+1. Resolved 2026-11-07 (board, HAC-30 interaction 10605fe7; CTO amendment AM-1): A1 as the default
+   (Challenge 09 primary), and A3 "sign off as reviewed" with sourced reference ranges. See Human
+   input. Still no clinician: `reviewer_status` and `vetting` never say "clinically reviewed".
 2. PVR open question 3 (the organiser cutoff and rules) is a CTO check. It feeds
    `organiser-rules.md` only.
 3. PVR open question 4 (R9 owners) stays "unassigned" at ship by design.
