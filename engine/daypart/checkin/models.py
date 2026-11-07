@@ -70,6 +70,17 @@ class Proposal(pydantic.BaseModel):
             raise ValueError("flags must not repeat")
         return self
 
+    def with_changes(self, **fields: Any) -> Proposal:
+        """A revalidated copy with ``fields`` replaced (``model_copy`` would skip the validators).
+
+        When ``flags`` changes and ``blocking`` is not given, ``blocking`` is recomputed from the
+        new flags; an explicit ``blocking`` that disagrees with the flags raises.
+        """
+        data = {**self.model_dump(), **fields}
+        if "flags" in fields and "blocking" not in fields:
+            del data["blocking"]
+        return Proposal.model_validate(data)
+
 
 class CheckIn(pydantic.BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -84,7 +95,7 @@ class CheckIn(pydantic.BaseModel):
         """A copy with ``status="saved"``; only ``pending_review`` → ``saved`` is allowed."""
         if self.status != "pending_review":
             raise ValueError(f"check-in {self.checkin_id!r} is already {self.status!r}")
-        return self.model_copy(update={"status": "saved"})
+        return CheckIn.model_validate({**self.model_dump(), "status": "saved"})
 
 
 __all__ = ["FLAGS", "METHOD_FIXTURE", "METHOD_TEXT", "SNIPPET_MAX", "CheckIn", "Flag", "Proposal"]

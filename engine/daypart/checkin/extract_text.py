@@ -462,7 +462,7 @@ def _detect(proposals: Iterable[Proposal], sticky: dict[str, set[str]]) -> tuple
     out = []
     for p, f in zip(props, flags, strict=True):
         ordered = tuple(sorted(f, key=FLAGS.index))
-        out.append(Proposal.model_validate({**p.model_dump(), "flags": ordered, "blocking": bool(ordered)}))
+        out.append(p.with_changes(flags=ordered))
     return tuple(out)
 
 

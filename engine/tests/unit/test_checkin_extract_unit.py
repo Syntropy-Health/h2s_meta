@@ -591,3 +591,33 @@ def test_p9_date_only_correction_keeps_unit_assumed() -> None:
     assert detect_flags(fixed, corrected={"p-1": frozenset({"unit"})})[0].flags == ("ambiguous_date",)
     assert detect_flags(fixed, corrected={"p-2": frozenset({"unit", "date"})})[0].flags == ("unit_assumed", "ambiguous_date")
     assert detect_flags(fixed, corrected={"p-1": frozenset({"unit", "date"})})[0].flags == ()
+
+
+def test_p11_with_changes_revalidates_the_blocking_invariant() -> None:
+    p = _proposal(flags=("unit_assumed",))
+    assert p.blocking is True
+    cleared = p.with_changes(flags=())
+    assert cleared.flags == () and cleared.blocking is False
+    assert p.blocking is True  # the original is untouched
+    assert p.with_changes(value=7.0).blocking is True
+    assert _proposal().with_changes(flags=("contradiction",)).blocking is True
+    with pytest.raises(pydantic.ValidationError):
+        p.with_changes(flags=(), blocking=True)
+    with pytest.raises(pydantic.ValidationError):
+        p.with_changes(blocking=False)
+    with pytest.raises(pydantic.ValidationError):
+        p.with_changes(confidence="certain")
+
+
+def test_p11_mark_saved_revalidates() -> None:
+    c = CheckIn(
+        checkin_id="c-1", journal_id="j-1", created_at=dt.datetime(2026, 9, 29, 12, tzinfo=dt.UTC),
+        status="pending_review", proposals=(_proposal(flags=("unit_assumed",)),),
+    )
+    saved = c.mark_saved()
+    assert type(saved) is CheckIn and saved.status == "saved"
+    assert saved.proposals == c.proposals and saved.proposals[0].blocking is True
+    bad = Proposal.model_construct(**{**_proposal().model_dump(), "flags": ("unit_assumed",), "blocking": False})
+    forged = CheckIn.model_construct(**{**c.model_dump(), "proposals": (bad,)})
+    with pytest.raises(pydantic.ValidationError):
+        forged.mark_saved()  # model_copy would have carried the broken invariant into "saved"
