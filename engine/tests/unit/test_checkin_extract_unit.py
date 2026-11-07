@@ -246,7 +246,7 @@ def test_detect_flags_clears_bp_contradiction_when_corrected() -> None:
 def test_detect_flags_unit_assumed_cleared_only_for_corrected_ids() -> None:
     props = extract("slept 6", TODAY)
     assert detect_flags(props)[0].flags == ("unit_assumed",)
-    out = detect_flags(props, corrected={props[0].proposal_id})
+    out = detect_flags(props, corrected={props[0].proposal_id: frozenset({"unit"})})
     assert out[0].flags == () and out[0].blocking is False
 
 
@@ -254,7 +254,7 @@ def test_detect_flags_ambiguous_date_cleared_by_correction() -> None:
     props = extract("slept 6 hours on monday", TODAY)
     fixed = (props[0].model_copy(update={"date": TODAY}),)
     assert detect_flags(fixed)[0].flags == ("ambiguous_date",)
-    assert detect_flags(fixed, corrected={"p-1"})[0].flags == ()
+    assert detect_flags(fixed, corrected={"p-1": frozenset({"date"})})[0].flags == ()
 
 
 def test_detect_flags_reraises_range_and_unit() -> None:
@@ -580,3 +580,14 @@ def test_p8_bare_keyword_beside_another_concepts_value_is_missing_value() -> Non
 def test_p8_bare_keyword_of_the_bound_quantity_stays_silent(text: str) -> None:
     props = extract(text, TODAY)
     assert not [p for p in props if "missing_value" in p.flags], props
+
+
+def test_p9_date_only_correction_keeps_unit_assumed() -> None:
+    props = extract("slept 6 on monday", TODAY)
+    assert props[0].flags == ("unit_assumed", "ambiguous_date")
+    fixed = (props[0].model_copy(update={"date": TODAY}),)
+    assert detect_flags(fixed, corrected={"p-1": frozenset({"date"})})[0].flags == ("unit_assumed",)
+    assert detect_flags(fixed, corrected={"p-1": frozenset({"value"})})[0].flags == ("unit_assumed", "ambiguous_date")
+    assert detect_flags(fixed, corrected={"p-1": frozenset({"unit"})})[0].flags == ("ambiguous_date",)
+    assert detect_flags(fixed, corrected={"p-2": frozenset({"unit", "date"})})[0].flags == ("unit_assumed", "ambiguous_date")
+    assert detect_flags(fixed, corrected={"p-1": frozenset({"unit", "date"})})[0].flags == ()

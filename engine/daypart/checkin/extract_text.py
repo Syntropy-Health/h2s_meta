@@ -28,8 +28,9 @@ import bisect
 import datetime as dt
 import re
 from collections import Counter
-from collections.abc import Collection, Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from daypart.checkin.models import FLAGS, METHOD_TEXT, SNIPPET_MAX, Proposal
 from daypart.memory.registry import Concept, load_registry
@@ -417,6 +418,7 @@ def _measure(start: int, end: int, order: int, concept: Concept, value: float | 
 
 
 _STICKY = frozenset({"unit_assumed", "ambiguous_date"})
+_NO_CORRECTIONS: Mapping[str, frozenset[str]] = MappingProxyType({})
 
 
 def _detect(proposals: Iterable[Proposal], sticky: dict[str, set[str]]) -> tuple[Proposal, ...]:
@@ -464,23 +466,36 @@ def _detect(proposals: Iterable[Proposal], sticky: dict[str, set[str]]) -> tuple
     return tuple(out)
 
 
-def detect_flags(proposals: Iterable[Proposal], corrected: Collection[str] = frozenset()) -> tuple[Proposal, ...]:
+def detect_flags(
+    proposals: Iterable[Proposal], corrected: Mapping[str, frozenset[str]] = _NO_CORRECTIONS
+) -> tuple[Proposal, ...]:
     """Re-run every flag over a whole (possibly corrected) proposal set, from scratch.
 
     ``proposals``: the check-in's proposals after corrections were applied (order is kept).
-    ``corrected``: ids of proposals whose unit or date was *explicitly* set by a correction.
+    ``corrected``: proposal_id -> the fields a correction *explicitly* set, among ``"value"``,
+    ``"unit"`` and ``"date"``. Ids that are absent were not corrected.
 
     Re-derived from the registry each time: ``unit_mismatch`` (unit neither canonical nor an alt
     unit), ``out_of_plausible_range`` (value, converted to the canonical unit, outside
     ``plausible``), ``missing_value`` (value None), ``unknown_code`` (no registry concept) and the
     set-level ``contradiction`` (two proposals for one concept, or systolic ≤ diastolic).
     ``unit_assumed`` and ``ambiguous_date`` cannot be re-derived from the values, so they are kept
-    from the incoming flags unless the id is in ``corrected``; a missing unit (with a value) or a
-    missing date raises them again regardless. Returns new proposals with ``blocking`` recomputed.
+    from the incoming flags: ``unit_assumed`` clears only when ``"unit"`` is in that id's set and
+    ``ambiguous_date`` only when ``"date"`` is (a date-only correction keeps ``unit_assumed``). A
+    missing unit (with a value) or a missing date raises them again regardless. Returns new
+    proposals with ``blocking`` recomputed.
     """
     props = tuple(proposals)
-    done = set(corrected)
-    return _detect(props, sticky={p.proposal_id: set() if p.proposal_id in done else set(p.flags) for p in props})
+    sticky: dict[str, set[str]] = {}
+    for p in props:
+        fields = corrected.get(p.proposal_id, frozenset())
+        keep = set(p.flags)
+        if "unit" in fields:
+            keep.discard("unit_assumed")
+        if "date" in fields:
+            keep.discard("ambiguous_date")
+        sticky[p.proposal_id] = keep
+    return _detect(props, sticky=sticky)
 
 
 __all__ = ["NEAR", "UNKNOWN_WORDS", "detect_flags", "extract"]
