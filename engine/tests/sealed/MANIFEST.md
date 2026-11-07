@@ -56,3 +56,24 @@ Contract: `docs/daypart/contracts/CONTRACT-slice-E-eval-passport.md` section E1.
 | `data/convert_r2_corpus.py` | converter; `uv run python tests/sealed/data/convert_r2_corpus.py --check` from `engine/` confirms the committed corpus is current | | aborts on any label mismatch and never relabels |
 
 Read by `test_eval.py` (`TestSeededCorpus`, `TestR2Metrics::test_seeded_corpus_meets_r2`, `TestDefaultConfig`) and by the default `runs.yaml` `r2_boundary_dsl` arm.
+
+## Clinical Human Clone P1 — data core (HAC-38, sealed on HAC-39)
+
+Spec: A&D on HAC-33 (`workstreams/daypart/AND.md` rev 1), section "Per-requirement spec", as
+amended by CTO AM-1 (HAC-38, 2026-11-07): `reviewer_status == "reviewed: board sign-off 2026-11-07"`;
+an optional `reference_range` whose `source_evidence_id` resolves to `evidence/sources_v1.json`,
+else `null`. Interface details from the locked plan: G4 (add_nodes = the A4 codes not in `core()`),
+G8 (`demo/fixtures/manifest.json`), G9 (correction window [today-28, today]). Shared helpers:
+`conftest_chc.py` (imported explicitly). Passport assertions skip until the P2 passport route exists.
+
+| file | T-ids | categories |
+|---|---|---|
+| `test_chc_registry.py` | T5.1, T5.2 (+AM-1 reference_range, no-source → null) | `functional/chc-registry` |
+| `test_chc_real_input.py` | T9.1, T9.2, T9.3 | `integration/chc-real-input` |
+| `test_chc_checkin_text.py` | T2.2, T2.3, T2.4 (+ journals, empty, nothing extracted) | `integration/chc-checkin-text` |
+| `test_chc_checkin_fixtures.py` | T3.1, T3.2 | `integration/chc-checkin-fixtures` |
+| `test_chc_review.py` | T4.1–T4.5, T5.3 (+ missing_decision, invalid_correction) | `integration/chc-review` |
+
+Observation points: HTTP via `create_app()`; writes by wrapping `EventLog.append` (J1); pending
+`CheckIn` objects counted via `gc`. T2.4 crisis rows: `boundary_corpus_v1.jsonl` rows with
+`crisis_context` whose text holds a `boundary-v1` `crisis_markers` term.
