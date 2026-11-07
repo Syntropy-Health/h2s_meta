@@ -29,7 +29,11 @@ from pydantic import ConfigDict, Field, StrictFloat, StrictInt
 from daypart.checkin import fixtures
 from daypart.checkin.crisis import HANDOFF_TEXT, is_crisis
 from daypart.checkin.extract_text import WINDOW_DAYS, detect_flags, extract
-from daypart.checkin.extractor import Extractor, ExtractorOutputError, validate_proposals
+from daypart.checkin.extractor import (
+    Extractor,
+    ExtractorOutputError,
+    validate_proposals,
+)
 from daypart.checkin.journal import Journal, ObservationRecord, Provenance
 from daypart.checkin.models import CheckIn, Proposal
 from daypart.checkin.tripwire import scan
