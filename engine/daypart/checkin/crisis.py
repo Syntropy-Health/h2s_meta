@@ -63,6 +63,9 @@ CRISIS_PATTERNS: tuple[tuple[str, str], ...] = (
                r"|i\s+(?:don'?t|do\s+not)\s+feel\s+safe(?=\s*(?:$|[.,!;?]|right\s+now|any\s*more|with\s+my\s*self))"),
     ("cant_go_on", r"(?:can'?t|cannot|can\s+not)\s+go\s+on"),
     ("suicide", r"suicid\w*"),
+    # Reaching emergency help in any tense: the pack marker is only "call 911" (QG-P1.6-4).
+    ("emergency_call", r"(?:call(?:s|ed|ing)?|dial(?:s|l?ed|l?ing)?|phon(?:e|es|ed|ing)|text(?:s|ed|ing)?|rang|ring(?:ing)?)"
+                       r"\s+(?:9-?1-?1|988)"),
 )
 
 _CRISIS_RE = re.compile(r"(?<![\w'-])(?:" + "|".join(p for _, p in CRISIS_PATTERNS) + r")(?![\w'-])")
