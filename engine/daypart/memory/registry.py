@@ -13,6 +13,7 @@ never rendered and carry no clinical meaning.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 import math
 from functools import cache
 from importlib import resources
@@ -20,7 +21,7 @@ from types import MappingProxyType
 from typing import Literal
 
 import pydantic
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, field_serializer, field_validator, model_validator
 
 from daypart.memory.ontology import (
     CORE_CAVEATS,
@@ -36,7 +37,7 @@ LOINC_VERSION = "2.83"
 SLICE_VERSION = "core-v1+u1"
 LOINC_NOTICE = (
     "This material contains content from LOINC® (https://loinc.org). LOINC is copyright © "
-    "Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) "
+    "1995-2026, Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) "
     "Committee and is available at no cost under the license at https://loinc.org/license/. "
     "LOINC® is a registered United States trademark of Regenstrief Institute, Inc."
 )
@@ -75,12 +76,21 @@ class Concept(pydantic.BaseModel):
     display: str = Field(min_length=1)
     vertical: Vertical
     unit: str = Field(min_length=1)
-    alt_units: dict[str, float] = Field(default_factory=dict)
+    alt_units: Mapping[str, float] = Field(default_factory=dict)  # read-only after validation
     value_type: Literal["quantity", "integer", "ordinal"]
     plausible: tuple[float, float]
     keywords: tuple[str, ...] = Field(min_length=1)
     reviewer_status: Literal["draft, not clinically reviewed"]
     allowed_use: str = Field(min_length=1)
+
+    @field_validator("alt_units", mode="after")
+    @classmethod
+    def _freeze_alt_units(cls, v: Mapping[str, float]) -> Mapping[str, float]:
+        return MappingProxyType(dict(v))  # the registry is a shared cache: no caller may mutate it
+
+    @field_serializer("alt_units")
+    def _dump_alt_units(self, v: Mapping[str, float]) -> dict[str, float]:
+        return dict(v)
 
     @model_validator(mode="after")
     def _check(self) -> Concept:

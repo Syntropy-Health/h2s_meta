@@ -209,6 +209,26 @@ def test_registry_json_records_loinc_version():
 
 def test_attribution_carries_loinc_notice():
     text = (REPO_ROOT / "ATTRIBUTION.md").read_text("utf-8")
-    assert "LOINC is copyright © Regenstrief Institute, Inc." in text
+    assert "LOINC is copyright © 1995-2026, Regenstrief Institute, Inc." in text
     assert "https://loinc.org/license/" in text
     assert LOINC_NOTICE in text
+
+
+# --- QG P1.1 bug-exposing tests ---------------------------------------------------------------
+
+
+def test_loinc_notice_carries_the_regenstrief_year_range():
+    # F3: Regenstrief's notice wording includes the "1995-<year>" copyright range.
+    repo_root = Path(__file__).resolve().parents[3]
+    expected = "LOINC is copyright © 1995-2026, Regenstrief Institute, Inc."
+    assert expected in LOINC_NOTICE
+    assert expected in (repo_root / "ATTRIBUTION.md").read_text(encoding="utf-8")
+
+
+def test_cached_concept_alt_units_cannot_be_mutated():
+    # F1: the registry is a shared cache; one caller must not change another's alt_units.
+    c = load_registry().by_code("29463-7")
+    with pytest.raises(TypeError):
+        c.alt_units["x"] = 1.0  # type: ignore[index]
+    assert "x" not in load_registry().by_code("29463-7").alt_units
+    assert c.model_dump(mode="json")["alt_units"]["[lb_av]"] == pytest.approx(0.45359237)

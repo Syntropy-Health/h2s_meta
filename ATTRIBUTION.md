@@ -36,7 +36,7 @@ Verify the boundary: `git diff --stat f170784 -- syntropy tests pyproject.toml u
 
 ### LOINC
 
-This material contains content from LOINC® (https://loinc.org). LOINC is copyright © Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is available at no cost under the license at https://loinc.org/license/. LOINC® is a registered United States trademark of Regenstrief Institute, Inc.
+This material contains content from LOINC® (https://loinc.org). LOINC is copyright © 1995-2026, Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is available at no cost under the license at https://loinc.org/license/. LOINC® is a registered United States trademark of Regenstrief Institute, Inc.
 
 The codes are used for display of synthetic values only; no clinical interpretation. Licence: https://loinc.org/license/
 
