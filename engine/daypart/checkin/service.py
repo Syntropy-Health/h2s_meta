@@ -29,6 +29,7 @@ from pydantic import ConfigDict, Field, StrictFloat, StrictInt
 from daypart.checkin import fixtures
 from daypart.checkin.crisis import HANDOFF_TEXT, is_crisis
 from daypart.checkin.extract_text import WINDOW_DAYS, detect_flags, extract
+from daypart.checkin.extractor import ExtractorOutputError, validate_proposals
 from daypart.checkin.journal import Journal, ObservationRecord, Provenance
 from daypart.checkin.models import CheckIn, Proposal
 from daypart.checkin.tripwire import scan
@@ -91,6 +92,14 @@ def _demo_only(real_input_requested: bool) -> None:
         raise RuntimeError("real input must never be enabled in this build")
 
 
+def _validated(output: object) -> tuple[Proposal, ...]:
+    """The typed extractor boundary (G21): malformed output is a 500 and nothing is written."""
+    try:
+        return validate_proposals(output)
+    except ExtractorOutputError:
+        raise CheckinError(500, "extractor_output_invalid") from None
+
+
 def create_checkin(
     journal: Journal,
     *,
@@ -129,7 +138,7 @@ def create_checkin(
         reasons = scan(text)
         if reasons:
             raise CheckinError(422, "looks_like_personal_data", reasons=list(reasons), warning=PII_WARNING)
-        proposals = extract(text, journal.today, checkin_id=checkin_id)
+        proposals = _validated(extract(text, journal.today, checkin_id=checkin_id))
         if not proposals:
             raise CheckinError(422, "nothing_extracted", hint=NOTHING_EXTRACTED_HINT)
     else:
@@ -141,7 +150,7 @@ def create_checkin(
                 raise CheckinError(_UPLOAD_STATUS.get(code, 422), code, message=UPLOAD_MESSAGES.get(code, "")) from None
         assert fixture_id is not None
         try:
-            proposals = fixtures.proposals_for(fixture_id, journal.today, checkin_id=checkin_id)
+            proposals = _validated(fixtures.proposals_for(fixture_id, journal.today, checkin_id=checkin_id))
         except fixtures.UnknownFixture:
             raise CheckinError(422, "not_a_demo_fixture", message=NOT_A_DEMO_FIXTURE_MESSAGE) from None
 
