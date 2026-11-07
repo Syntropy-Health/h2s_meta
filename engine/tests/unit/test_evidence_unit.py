@@ -290,3 +290,16 @@ def test_b2_url_has_no_credentials_or_port(url):
 
 def test_b2_url_query_and_port_443_are_allowed():
     assert Source.model_validate(a_source(url="https://example.org:443/x?lang=en")).url.endswith("lang=en")
+
+
+HR_RANGE = {"concept_id": "chc:heart-rate", "low": 60, "high": 100, "unit": "/min",
+            "population": "adults", "statement": "Pulse: 60 to 100 beats per minute"}
+
+
+@pytest.mark.parametrize("text", ["Clinically-reviewed", "clinically  reviewed", "vetted  sources",
+                                  "medically reviewed", "clinician reviewed", "expert-vetted", "doctor approved"])
+@pytest.mark.parametrize("field", ["population", "statement"])
+def test_b3_stated_range_copy_is_checked(field, text):
+    bad = {**HR_RANGE, field: f"{text} 60 to 100" if field == "statement" else text}
+    with pytest.raises(pydantic.ValidationError, match="copy may not say"):
+        StatedRange.model_validate(bad)

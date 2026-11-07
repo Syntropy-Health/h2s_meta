@@ -29,7 +29,10 @@ from daypart.memory.registry import ConceptRegistry, load_registry
 # AM-1 (board answer on A3, 2026-11-07). No clinician reviewed these, so the copy never says so.
 VETTING = "reviewed: board sign-off 2026-11-07"
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
-_FORBIDDEN_COPY = ("clinically reviewed", "vetted source")
+# AM-1 / R1: no copy may claim a clinical or expert review, or "vetted" sources (spacing and hyphens folded).
+_FORBIDDEN_COPY = re.compile(
+    r"(?:clinic(?:al(?:ly)?|ian)|medical(?:ly)?|physician|doctor|expert)\s*(?:review|vet|approv)|\bvetted\b"
+)
 _PRIVATE_SUFFIXES = (
     ".local", ".internal", ".lan", ".localhost", ".corp", ".home", ".svc", ".arpa", ".test", ".invalid",
     ".example", ".intranet", ".private",
@@ -43,10 +46,10 @@ def _numbers(text: str) -> set[float]:
 
 
 def _no_forbidden_copy(text: str) -> str:
-    low = text.lower()
-    for phrase in _FORBIDDEN_COPY:
-        if phrase in low:
-            raise ValueError(f"copy may not say {phrase!r} (AM-1, R1)")
+    folded = re.sub(r"[\s\-]+", " ", text.lower())
+    m = _FORBIDDEN_COPY.search(folded)
+    if m:
+        raise ValueError(f"copy may not say {m.group(0)!r} (AM-1, R1)")
     return text
 
 
@@ -61,6 +64,11 @@ class StatedRange(pydantic.BaseModel):
     unit: str = Field(min_length=1)
     population: str = Field(min_length=1)
     statement: str = Field(min_length=1, max_length=300)
+
+    @field_validator("population", "statement")
+    @classmethod
+    def _copy(cls, v: str) -> str:
+        return _no_forbidden_copy(v)
 
     @model_validator(mode="after")
     def _check(self) -> StatedRange:
