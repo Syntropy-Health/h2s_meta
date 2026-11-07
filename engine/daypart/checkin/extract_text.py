@@ -512,7 +512,7 @@ def detect_flags(
     sticky: dict[str, set[str]] = {}
     for p in props:
         fields = corrected.get(p.proposal_id, frozenset())
-        keep = set(p.flags)
+        keep: set[str] = set(p.flags)
         if "unit" in fields:
             keep.discard("unit_assumed")
         if "date" in fields:

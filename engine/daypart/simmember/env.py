@@ -174,7 +174,7 @@ class SimMemberEnv(Environment[EnvState]):
     def _reply(self, call: ToolCall, content: str) -> ToolResponseMessage:
         return ToolResponseMessage.from_call(call, content=content)
 
-    async def step(self, action: ToolRequestMessage) -> tuple[list[Message], float, bool, bool]:
+    async def step(self, action: Message) -> tuple[list[Message], float, bool, bool]:
         if self.state.done:
             raise RuntimeError("episode is done; call reset() before stepping again")
         if not isinstance(action, ToolRequestMessage) or not action.tool_calls:

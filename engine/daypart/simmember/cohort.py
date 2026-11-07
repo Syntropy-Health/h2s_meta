@@ -122,7 +122,7 @@ def synthetic_latents(seed: int, n: int) -> tuple[Latents, ...]:
         strat = [strat[j] for j in rng.permutation(len(strat))][:n]
         rest = [levels[j] for j in rng.integers(0, len(levels), size=max(0, n - len(strat)))]
         columns[axis] = strat + rest
-    curated = {p.latents for p in CURATED_PROFILES}
+    curated = {p.latents for p in CURATED_PROFILES}  # pyright: ignore[reportUnhashable]  # Latents is frozen, so hashable
     out: list[Latents] = []
     for i in range(n):
         cats = {axis: columns[axis][i] for axis in _AXIS_NAMES}

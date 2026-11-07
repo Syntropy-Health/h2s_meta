@@ -39,6 +39,7 @@ class Latents(pydantic.BaseModel):
     @field_validator(*AXES.keys())
     @classmethod
     def _level_of_axis(cls, value: str, info: pydantic.ValidationInfo) -> str:
+        assert info.field_name is not None  # always set for a field validator
         levels = AXES[info.field_name]
         if value not in levels:
             raise ValueError(f"{info.field_name}={value!r} is not one of {levels}")

@@ -87,7 +87,7 @@ class Playground:
 
     # -- episodes --------------------------------------------------------------------------
     async def start(self, member_id: str, *, seed: int = 0, horizon: int = 14) -> dict[str, Any]:
-        scenario = Scenario(member=self.member(member_id), seed=seed, horizon=horizon)
+        scenario = Scenario(member=self.member(member_id), seed=seed, horizon=horizon)  # pyright: ignore[reportCallIssue]  # scenario_id is filled by a before-validator
         env = SimMemberEnv(scenario)
         msgs, _tools = await env.reset()
         ep = Episode(uuid.uuid4().hex, scenario, env, safe_text(msgs[0].content))

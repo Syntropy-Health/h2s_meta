@@ -123,7 +123,7 @@ def generate_trajectory(member_id: str, latents: Latents, seed: int, days: int =
             DayRecord(
                 day=day,
                 date=date,
-                state=state,
+                state=state,  # pyright: ignore[reportArgumentType]  # pydantic checks the Literal at runtime
                 adhered=adhered,
                 checkin=checkin,
                 sentiment=sentiment_for(latents.affect_baseline, state, noise) if checkin else None,

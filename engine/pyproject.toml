@@ -48,6 +48,14 @@ include = ["daypart*"]
 "daypart.memory" = ["*.json", "*.csv"]
 "daypart.governance" = ["*.yaml"]
 
+[tool.pyright]
+# CI type check (HAC-38 G20): basic mode over the daypart package.
+include = ["daypart"]
+# Runs only inside the Modal image; torch/transformers/peft/trl/modal are not engine dependencies.
+exclude = ["daypart/train/modal_app.py"]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+
 [tool.pytest.ini_options]
 addopts = ""
 testpaths = ["tests"]

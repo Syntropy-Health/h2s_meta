@@ -293,7 +293,7 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None, *, sleep
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="python -m daypart.train.run", description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser(prog="python -m daypart.train.run", description=__doc__.splitlines()[0] if __doc__ else None)
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--members", type=int, default=None, help="first N training members (default: all)")
