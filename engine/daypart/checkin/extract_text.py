@@ -68,6 +68,18 @@ _UNIT_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"(?:[°º]\s*c|celsius|degc|c)(?![a-z])", "Cel"),
 )
 _UNIT_RES = tuple((re.compile(r"\s*(?:" + p + ")"), u) for p, u in _UNIT_PATTERNS)
+
+
+def unit_at(text: str, pos: int) -> str | None:
+    """The UCUM code of a unit token starting at ``text[pos]`` (after optional space), else None.
+
+    ``text`` is expected lower-cased, as the extractor sees it.
+    """
+    for rx, ucum in _UNIT_RES:
+        if rx.match(text, pos):
+            return ucum
+    return None
+
 # A token that names the concept's own counting unit (e.g. "steps" for steps in 24 hours).
 _UNIT_EQUIV: dict[str, dict[str, str]] = {"41950-7": {"{steps}": "{steps}/(24.h)"}}
 
@@ -509,4 +521,4 @@ def detect_flags(
     return _detect(props, sticky=sticky, today=today)
 
 
-__all__ = ["NEAR", "UNKNOWN_WORDS", "WINDOW_DAYS", "detect_flags", "extract"]
+__all__ = ["NEAR", "UNKNOWN_WORDS", "WINDOW_DAYS", "detect_flags", "extract", "unit_at"]

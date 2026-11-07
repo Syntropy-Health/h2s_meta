@@ -3,22 +3,34 @@
 Free text is checked for crisis language **before** extraction; a hit means nothing is extracted
 or stored and the member gets :data:`HANDOFF_TEXT`.
 
-Why a lexicon of its own: the ``boundary-v1`` rule pack's ``crisis_markers`` are the hand-off
-markers a *reply* must contain ("988", "emergency services", ...), not the language a *member*
-uses when in crisis, so reusing them (the original G6 reading) would detect nothing useful. This
-module keeps a regex lexicon of member crisis language (small word families, see
-:data:`CRISIS_PATTERNS`) and matches it, as whole words, on the DSL's
-:func:`~daypart.membrane.dsl.normalize` output (casefold, NFKC, confusable and apostrophe fold),
-with every Unicode dash folded to ``-``, so case, accents, curly apostrophes and dashes cannot
-hide a phrase.
+Two vocabularies, either one is a hit (A&D failure row 1; plan G6, G13, G18):
+
+* the ``boundary-v1`` rule pack's ``crisis_markers`` (:data:`CRISIS_MARKERS`: "988", "emergency
+  services", "crisis line", ...), the vocabulary the A&D names. A numeric marker followed by a unit
+  ("walked 988 steps") is a measurement, not a hand-off, and does not count;
+* a regex lexicon of the language a *member* uses when in crisis (:data:`CRISIS_PATTERNS`, small
+  word families), because the pack's markers are what a *reply* must contain and miss most member
+  phrasing.
+
+Both match as whole words on the DSL's :func:`~daypart.membrane.dsl.normalize` output (casefold,
+NFKC, confusable and apostrophe fold), with every Unicode dash folded to ``-``, so case, accents,
+curly apostrophes and dashes cannot hide a phrase.
 """
 
 from __future__ import annotations
 
 import re
 
+from daypart.checkin.extract_text import unit_at
 from daypart.eval import POLICY_TEXT
 from daypart.membrane import dsl
+
+#: The rule pack's crisis hand-off vocabulary, reused as-is (A&D failure row 1).
+CRISIS_MARKERS: tuple[str, ...] = tuple(dsl.load_rules(dsl.RULE_VERSION).crisis_markers)
+_MARKER_RES = tuple(
+    re.compile(r"(?<![\w.,'-])" + r"\s+".join(map(re.escape, dsl.normalize(m).split())) + r"(?![\w'-]|[.,]\d)")
+    for m in CRISIS_MARKERS
+)
 
 #: Member crisis language: small regex families (name, pattern) matched over normalised text.
 CRISIS_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -56,8 +68,15 @@ HANDOFF_TEXT = (
 
 
 def is_crisis(text: str) -> bool:
-    """True when ``text`` matches a member-crisis family (whole words, after normalisation)."""
-    return bool(_CRISIS_RE.search(dsl.normalize(text).translate(_DASH_FOLD)))
+    """True when ``text`` holds a pack crisis marker or a member-crisis family (whole words, normalised)."""
+    norm = dsl.normalize(text).translate(_DASH_FOLD)
+    if _CRISIS_RE.search(norm):
+        return True
+    for rx in _MARKER_RES:
+        for m in rx.finditer(norm):
+            if not (m.group().isdigit() and unit_at(norm, m.end()) is not None):
+                return True
+    return False
 
 
-__all__ = ["CRISIS_PATTERNS", "HANDOFF_TEXT", "is_crisis"]
+__all__ = ["CRISIS_MARKERS", "CRISIS_PATTERNS", "HANDOFF_TEXT", "is_crisis"]
