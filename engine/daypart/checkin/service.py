@@ -29,7 +29,7 @@ from pydantic import ConfigDict, Field, StrictFloat, StrictInt
 from daypart.checkin import fixtures
 from daypart.checkin.crisis import HANDOFF_TEXT, is_crisis
 from daypart.checkin.extract_text import WINDOW_DAYS, detect_flags, extract
-from daypart.checkin.extractor import ExtractorOutputError, validate_proposals
+from daypart.checkin.extractor import Extractor, ExtractorOutputError, validate_proposals
 from daypart.checkin.journal import Journal, ObservationRecord, Provenance
 from daypart.checkin.models import CheckIn, Proposal
 from daypart.checkin.tripwire import scan
@@ -90,6 +90,10 @@ def _demo_only(real_input_requested: bool) -> None:
     s = real_input.status(requested=real_input_requested)
     if s.enabled:  # unreachable while REAL_INPUT_BUILD_ALLOWED is False; never trust it silently
         raise RuntimeError("real input must never be enabled in this build")
+
+
+# Both extractors, bound to the protocol so pyright checks them against the G21 contract.
+EXTRACTORS: tuple[Extractor, Extractor] = (extract, fixtures.proposals_for)
 
 
 def _validated(output: object) -> tuple[Proposal, ...]:

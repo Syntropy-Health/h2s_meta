@@ -30,7 +30,7 @@ class ExtractorOutputError(ValueError):
 
 
 class Extractor(Protocol):
-    def __call__(self, source: Any, today: dt.date, *, checkin_id: str) -> Sequence[Proposal]: ...
+    def __call__(self, source: Any, today: dt.date, /, *, checkin_id: str) -> Sequence[Proposal]: ...
 
 
 def _check(i: int, item: object) -> Proposal:
