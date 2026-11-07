@@ -120,6 +120,9 @@ new eval environment (HAC-16), ontology beyond the A4 slice, voice and video, an
   a concept may carry `reference_range` only where a source in `sources_v1.json` states the numbers,
   otherwise `null` ("no reference range"); a range is shown beside the value with its population and
   source and is never interpreted (A2 holds); `plausible` stays validation-only and is never rendered.
+- 2026-11-07 (CTO, HAC-38 comment 859317b9, from a board question on HAC-33 about typesafe AI):
+  a pyright job (basic mode, `engine/daypart`) runs in CI and gates the demo deploy; the extractor
+  boundary is typed (§4.1 "Extractor contract"). No live model in this build. Plan addendum G20, G21.
 
 ## Agent assumptions
 
@@ -191,6 +194,7 @@ New code lives under `engine/daypart/`. Existing modules are extended, never for
 | PII tripwire | `checkin/tripwire.py` | `scan(text) -> list[str]` (reason codes) | check-in service | — |
 | Text extractor | `checkin/extract_text.py` | `extract(text, today) -> list[Proposal]` | check-in service | registry |
 | Fixture intake | `checkin/fixtures.py` + `demo/fixtures/*` | allow-list by sha256, size and type checks, sidecar extraction | check-in service | registry |
+| Extractor boundary | `checkin/extractor.py` | `Extractor` protocol; `validate_proposals(output) -> tuple[Proposal, ...]` (§4.1 contract) | check-in service | models |
 | Check-in service | `checkin/service.py` | `create_checkin` (gate → crisis check → PII tripwire → extract), `review` (all-or-nothing), state machine | app | journal, extractors, tripwire, crisis, gate |
 | Journal | `checkin/journal.py` | Per-visitor clone: member profile ref, `EventLog`, `ProvenanceStore`, `MemoryLhm`, synthetic clock | service, passport view, next step | `memory.events`, `memory.lhm`, `simmember` |
 | Evidence registry | `evidence/registry.py` + `evidence/sources_v1.json` | `Source` entries, `for_concept(code)` | passport view | — |
@@ -260,6 +264,14 @@ systolic ≤ diastolic contradiction clears both when they no longer conflict. D
 `save_unmapped` proposals stay in the re-run set (G17), so two values for one concept are resolved
 by discarding both (or saving them unmapped) and checking in again. `unit_assumed` clears when `correct`
 states a unit explicitly.
+
+**Extractor contract (G21).** Every extractor returns `Proposal` models only. `create_checkin`
+passes each extractor's output through `validate_proposals`, which dumps and revalidates every item
+with `Proposal.model_validate` (`extra="forbid"`, so a field the schema lacks, such as a risk score,
+is refused; `model_construct` cannot bypass it) and refuses duplicate `proposal_id`s. Malformed
+output is a 500 `extractor_output_invalid`: no CheckIn is created and nothing reaches the journal.
+Any future model-backed extractor must request structured output in `Proposal.model_json_schema()`
+and `model_validate` each item; flags still come from `detect_flags`, never from the model.
 
 ### 4.2 Journal (per visitor, `checkin/journal.py`)
 
@@ -477,6 +489,7 @@ repo or an `ASSUMPTION` tag, and `outcomes.md` equals the regenerated table byte
 | Free text contains crisis language (the membrane's crisis lexicon, `checkin/crisis.py` reusing the `boundary-v1` crisis vocabulary), checked **before** extraction | nothing extracted or stored; respond with the fixed `clinician_handoff` text and a pointer to local emergency services | 200 `{"status":"handoff","text":…}`; the UI shows it in place of review |
 | Free text matches the PII tripwire | refuse the whole check-in; nothing extracted or stored | 422 `looks_like_personal_data`, with the reasons and the "don't enter real data" warning |
 | Empty or whitespace text and no fixture | refuse | 422 `empty_checkin` |
+| An extractor returns output that is not valid `Proposal` models (G21) | refuse; no CheckIn created, nothing stored; the error carries no input value | 500 `extractor_output_invalid` |
 | Text yields no proposal | refuse, offering "try e.g. 'slept 7 hours'" | 422 `nothing_extracted`; no CheckIn created |
 | Upload > 1 MiB | checked before reading the body fully (stream limit) | 413 `too_large` |
 | Upload magic bytes not PNG/JPEG/CSV/JSON | refuse (the extension is ignored) | 415 `unsupported_type` |
