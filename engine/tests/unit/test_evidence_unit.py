@@ -280,3 +280,13 @@ def test_f7_shipped_urls_pass_the_hardened_validator():
     for s in load_evidence().sources:
         Source.model_validate({**s.model_dump(mode="json"), "url": s.url})
         assert urlparse(s.url).hostname in {"medlineplus.gov", "www.nhlbi.nih.gov", "www.who.int"}
+
+
+@pytest.mark.parametrize("url", ["https://u:p@example.org/x", "https://u@example.org/x", "https://example.org:8443/x"])
+def test_b2_url_has_no_credentials_or_port(url):
+    with pytest.raises(pydantic.ValidationError, match="credentials or a port"):
+        Source.model_validate(a_source(url=url))
+
+
+def test_b2_url_query_and_port_443_are_allowed():
+    assert Source.model_validate(a_source(url="https://example.org:443/x?lang=en")).url.endswith("lang=en")

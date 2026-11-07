@@ -103,6 +103,8 @@ class Source(pydantic.BaseModel):
         u = urlparse(v)
         if u.scheme != "https":
             raise ValueError("url must be a public https page")
+        if u.username is not None or u.password is not None or u.port not in (None, 443):
+            raise ValueError("url may not carry credentials or a port")
         host = (u.hostname or "").lower().rstrip(".")
         if "." not in host or host.endswith(_PRIVATE_SUFFIXES + _IP_DNS_SUFFIXES):
             raise ValueError("url host is not a public name")
