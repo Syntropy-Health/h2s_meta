@@ -17,6 +17,7 @@ No message here ever names a ``plausible`` bound (T5.5): reasons are fixed codes
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import math
 from collections.abc import Iterable, Mapping, Sequence
@@ -256,6 +257,11 @@ async def review(
             raise CheckinError(404, "unknown_checkin")
         if checkin.status == "saved":
             raise CheckinError(409, "already_saved")
+        # Deliberate yield point (QG-P1-H12): without an await here the critical section never
+        # yields, so a second review could not interleave even with no lock and the lock would be
+        # unobservable. It sits after the already_saved read so only the lock keeps a concurrent
+        # review from passing that check too; T4.5 relies on it.
+        await asyncio.sleep(0)
         parsed = _parse_decisions(decisions)
         proposals = checkin.proposals
         _check_decision_set(proposals, parsed)

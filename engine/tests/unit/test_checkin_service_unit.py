@@ -432,21 +432,44 @@ def test_t4_4_confirm_one_of_two_then_409(client):
     assert len(j.events) == 1 and j.checkins[ck["checkin_id"]].status == "saved"
 
 
-async def test_t4_5_concurrent_double_review_one_write(cohort):
-    store = JournalStore(cohort)
-    j = store.create("syn-005")
+class _NoOpLock:
+    """An async context manager that excludes nothing: stands in for the journal lock."""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+async def _double_review(j):
     ck = service.create_checkin(j, text="slept 6 hours")
     decisions = [{"proposal_id": "p-1", "action": "confirm"}]
-    results = await asyncio.gather(
+    return await asyncio.gather(
         service.review(j, ck["checkin_id"], decisions),
         service.review(j, ck["checkin_id"], decisions),
         return_exceptions=True,
     )
+
+
+async def test_t4_5_concurrent_double_review_one_write(cohort):
+    j = JournalStore(cohort).create("syn-005")
+    results = await _double_review(j)
     oks = [r for r in results if isinstance(r, dict)]
     errs = [r for r in results if isinstance(r, CheckinError)]
     assert len(oks) == 1 and len(errs) == 1
     assert errs[0].status == 409 and errs[0].body["error"] == "already_saved"
     assert len(j.events) == 1 and len(j.provenance) == 1
+
+
+async def test_t4_5_is_sensitive_to_the_lock(cohort):
+    """QG-P1-H12: review yields inside the critical section, so without the lock both reviews pass
+    the already_saved check and both write; T4.5 above therefore really exercises the lock."""
+    j = JournalStore(cohort).create("syn-005")
+    j.lock = _NoOpLock()
+    results = await _double_review(j)
+    assert all(isinstance(r, dict) for r in results), results
+    assert len(j.events) == 2
 
 
 def test_review_unknown_checkin_or_other_journal_404(client):
