@@ -96,7 +96,7 @@ async def _read_capped(request: Request) -> bytes:
 async def _json_object(request: Request) -> dict[str, Any] | None:
     try:
         data = json.loads(await _read_capped(request))
-    except (ValueError, UnicodeDecodeError):
+    except (ValueError, UnicodeDecodeError, RecursionError):  # RecursionError: e.g. "[" * 200_000
         return None
     return data if isinstance(data, dict) else None
 
@@ -276,7 +276,7 @@ def create_app(cohort_seed: int = 0, results_url: str | None = None) -> FastAPI:
         else:
             try:
                 body = json.loads(raw)
-            except (ValueError, UnicodeDecodeError):
+            except (ValueError, UnicodeDecodeError, RecursionError):  # deeply nested JSON is a 422
                 body = None
             if not isinstance(body, dict):
                 return _error(422, {"error": "invalid_request"})

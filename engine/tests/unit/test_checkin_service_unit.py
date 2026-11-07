@@ -748,3 +748,28 @@ def test_signal_events_are_free_text_free(client):
     (event,) = _signals(_j(client, jid))
     assert isinstance(event, SignalEvent)
     assert set(event.model_dump()) == {"kind", "event_id", "member_id", "occurred_at", "code", "value"}
+
+
+# --- V7: deeply nested JSON bodies --------------------------------------------------------------------
+
+DEEP_JSON = b"[" * 200_000
+
+
+@pytest.mark.parametrize("path", ["/api/journals", "/api/checkins", "/api/checkins/x-c1/review"])
+def test_deeply_nested_json_body_is_422_not_500(client, path):
+    r = client.post(path, content=DEEP_JSON, headers={"content-type": "application/json"})
+    assert r.status_code == 422, r.text
+    assert r.json() == {"error": "invalid_request"}
+
+
+def test_deeply_nested_json_on_real_review_route_is_422(client):
+    jid, ck = _pending(client, "slept 6 hours")
+    r = client.post(f"/api/checkins/{ck['checkin_id']}/review", content=DEEP_JSON,
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 422 and r.json() == {"error": "invalid_request"}
+    assert _j(client, jid).checkins[ck["checkin_id"]].status == "pending_review"
+
+
+def test_deeply_nested_json_on_mode_is_still_403(client):
+    r = client.post("/api/mode", content=DEEP_JSON, headers={"content-type": "application/json"})
+    assert r.status_code == 403 and r.json()["error"] == "real_input_refused"
