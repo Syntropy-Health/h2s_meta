@@ -123,3 +123,35 @@ def test_malformed_fixture_extractor_output_never_reaches_the_journal(journal, m
         service.create_checkin(journal, fixture_id=fid)
     assert e.value.status == 500 and e.value.body == {"error": "extractor_output_invalid"}
     _assert_untouched(journal)
+
+
+# --- QG P1.7 ------------------------------------------------------------------------------------
+
+
+def test_d2_extractor_protocol_source_is_positional_only():
+    import inspect
+
+    from daypart.checkin.extractor import Extractor
+
+    params = inspect.signature(Extractor.__call__).parameters
+    assert params["source"].kind is inspect.Parameter.POSITIONAL_ONLY
+    assert params["today"].kind is inspect.Parameter.POSITIONAL_ONLY
+    # Both real extractors are bound to the protocol, so pyright checks them against it.
+    assert service.EXTRACTORS == (extract, fixtures.proposals_for)
+
+
+def test_t4_extra_key_names_are_not_echoed():
+    with pytest.raises(ExtractorOutputError) as e:
+        validate_proposals([_good(), {**_good(), "proposal_id": "p-2", "secret_key_name": 1}])
+    assert "secret_key_name" not in str(e.value)
+    assert str(e.value) == "proposal 1: invalid <extra field>"
+
+
+def test_t2_malformed_upload_extractor_output_never_reaches_the_journal(journal, monkeypatch):
+    fid = next(iter(fixtures.manifest()))
+    data, _media = fixtures.fixture_bytes(fid)
+    monkeypatch.setattr(fixtures, "proposals_for", lambda *a, **k: ({**_good(), "risk_score": 1},))
+    with pytest.raises(CheckinError) as e:
+        service.create_checkin(journal, upload=data)
+    assert e.value.status == 500 and e.value.body == {"error": "extractor_output_invalid"}
+    _assert_untouched(journal)
