@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Final, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 REAL_INPUT_BUILD_ALLOWED: Final = False
 
@@ -37,6 +37,9 @@ GATE_IDS: Final = (
 )
 
 
+UNASSIGNED = "unassigned"
+
+
 class Gate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     id: str
@@ -44,6 +47,16 @@ class Gate(BaseModel):
     status: Literal["open", "closed"]
     owner: str  # a name, or "unassigned"
     evidence: str | None = None
+
+    @model_validator(mode="after")
+    def _closed_needs_owner_and_evidence(self) -> Gate:
+        # §4.9: a closed item names its owner and links its evidence.
+        if self.status == "closed":
+            if self.owner.strip() in ("", UNASSIGNED):
+                raise ValueError(f"closed gate {self.id!r} needs a named owner")
+            if not (self.evidence or "").startswith("https://"):
+                raise ValueError(f"closed gate {self.id!r} needs an https evidence link")
+        return self
 
 
 class RealInputStatus(BaseModel):
