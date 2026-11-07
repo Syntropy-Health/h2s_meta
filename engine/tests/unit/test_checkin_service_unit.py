@@ -363,19 +363,33 @@ def test_t4_2_correct_with_valid_values_200(client):
     assert rec.quality == "corrected" and rec.status == "mapped"
 
 
-def test_contradiction_cleared_by_discarding_one_side(client):
-    _jid, ck = _pending(client, "slept 6 hours and slept 7 hours")
-    bad = _review(client, ck["checkin_id"], [
-        {"proposal_id": "p-1", "action": "confirm"},
-        {"proposal_id": "p-2", "action": "correct", "value": 6},
-    ])
-    assert bad.status_code == 422 and bad.json()["error"] == "unresolved_flags"
+def test_contradiction_not_cleared_by_discarding_one_side(client):
+    # A&D 4.1 / G17: flags re-run over the whole post-correction set, discarded proposals included;
+    # only a correction clears a flag. Discarding one side leaves the other side blocking.
+    jid, ck = _pending(client, "slept 6 hours and slept 7 hours")
+    j = _j(client, jid)
+    snap = _snapshot(j)
+    for decisions in (
+        [{"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "correct", "value": 6}],
+        [{"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "discard"}],
+    ):
+        bad = _review(client, ck["checkin_id"], decisions)
+        assert bad.status_code == 422 and bad.json()["error"] == "unresolved_flags"
+        assert [p["proposal_id"] for p in bad.json()["proposals"]] == ["p-1"]
+        assert _snapshot(j)[:2] == snap[:2] and j.checkins[ck["checkin_id"]].status == "pending_review"
     ok = _review(client, ck["checkin_id"], [
-        {"proposal_id": "p-1", "action": "confirm"},
-        {"proposal_id": "p-2", "action": "discard"},
+        {"proposal_id": "p-1", "action": "discard"}, {"proposal_id": "p-2", "action": "discard"},
     ])
     assert ok.status_code == 200, ok.text
-    assert ok.json()["discarded"] == ["p-2"]
+    assert ok.json()["discarded"] == ["p-1", "p-2"] and ok.json()["written"] == []
+
+
+def test_bp_contradiction_not_cleared_by_discarding_diastolic(client):
+    _jid, ck = _pending(client, "bp 80/120")
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "discard"},
+    ])
+    assert r.status_code == 422 and r.json()["error"] == "unresolved_flags"
 
 
 def test_t4_2_save_unmapped_no_signal_event(client):
