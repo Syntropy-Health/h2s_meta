@@ -7,7 +7,9 @@ one gated :class:`~daypart.memory.ontology.OntologyUpdate` that adds the LOINC n
 already in core (version :data:`SLICE_VERSION`).
 
 ``plausible`` bounds are input validation only (the EventLog ``value_range``); they are
-never rendered and carry no clinical meaning.
+never rendered and carry no clinical meaning. ``reference_range`` (AM-1) is distinct: it is set
+only where a public source in the evidence registry states the numbers, carries that source's id,
+and is shown beside a value without interpretation. A concept with no such source keeps ``None``.
 """
 
 from __future__ import annotations
@@ -47,7 +49,8 @@ LOINC_NOTICE = (
     "Committee and is available at no cost under the license at https://loinc.org/license/. "
     "LOINC® is a registered United States trademark of Regenstrief Institute, Inc."
 )
-REVIEWER_STATUS = "draft, not clinically reviewed"
+# AM-1 (board answer on A3, 2026-11-07). Honest by construction: no clinician reviewed this.
+REVIEWER_STATUS = "reviewed: board sign-off 2026-11-07"
 PROPOSER = "daypart.memory.registry"
 
 Vertical = Literal["vitals_body", "behaviour_function", "symptoms_wellbeing"]
@@ -72,6 +75,29 @@ _LABELS = {
 }
 
 
+class ReferenceRange(pydantic.BaseModel):
+    """A sourced reference range (AM-1). Every number traces to ``source_evidence_id``; never derived."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    low: float | None
+    high: float | None
+    unit: str = Field(min_length=1)
+    population: str = Field(min_length=1)
+    source_evidence_id: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check(self) -> ReferenceRange:
+        if self.low is None and self.high is None:
+            raise ValueError("reference_range needs at least one stated bound")
+        for bound in (self.low, self.high):
+            if bound is not None and not math.isfinite(bound):
+                raise ValueError("reference_range bounds must be finite")
+        if self.low is not None and self.high is not None and not self.low < self.high:
+            raise ValueError("reference_range low must be below high")
+        return self
+
+
 class Concept(pydantic.BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -86,8 +112,9 @@ class Concept(pydantic.BaseModel):
     value_type: Literal["quantity", "integer", "ordinal"]
     plausible: tuple[float, float]
     keywords: tuple[str, ...] = Field(min_length=1)
-    reviewer_status: Literal["draft, not clinically reviewed"]
+    reviewer_status: Literal["reviewed: board sign-off 2026-11-07"]
     allowed_use: str = Field(min_length=1)
+    reference_range: ReferenceRange | None = None  # AM-1: None unless a source states the numbers
 
     @field_validator("alt_units", mode="after")
     @classmethod
@@ -110,6 +137,9 @@ class Concept(pydantic.BaseModel):
         for unit, factor in self.alt_units.items():
             if not (math.isfinite(factor) and factor > 0):
                 raise ValueError(f"alt_units[{unit!r}] must be a positive finite factor")
+        rr = self.reference_range
+        if rr is not None and rr.unit != self.unit and rr.unit not in self.alt_units:
+            raise ValueError(f"reference_range unit {rr.unit!r} is not a unit of {self.code}")
         return self
 
 
@@ -200,6 +230,7 @@ __all__ = [
     "LOINC_NOTICE",
     "LOINC_VERSION",
     "REVIEWER_STATUS",
+    "ReferenceRange",
     "SLICE_VERSION",
     "VERTICALS",
     "Concept",

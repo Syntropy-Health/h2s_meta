@@ -34,8 +34,9 @@
         "hr",
         "bpm"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:bp-systolic",
@@ -56,8 +57,9 @@
         "bp",
         "systolic"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:bp-diastolic",
@@ -76,8 +78,9 @@
       "keywords": [
         "diastolic"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:body-weight",
@@ -101,8 +104,9 @@
         "weigh",
         "weighed"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:body-height",
@@ -125,8 +129,9 @@
         "height",
         "tall"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:bmi",
@@ -146,8 +151,9 @@
         "bmi",
         "body mass index"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:body-temperature",
@@ -168,8 +174,9 @@
         "temp",
         "fever"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:respiratory-rate",
@@ -189,8 +196,9 @@
         "respiratory rate",
         "breaths"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:spo2",
@@ -211,8 +219,9 @@
         "oxygen saturation",
         "o2 sat"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:waist-circumference",
@@ -234,8 +243,9 @@
       "keywords": [
         "waist"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:steps",
@@ -255,8 +265,9 @@
         "steps",
         "walked"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:steps-24h",
@@ -277,8 +288,9 @@
         "daily steps",
         "steps in 24 hours"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:exercise-duration",
@@ -301,8 +313,9 @@
         "workout",
         "exercise"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:sleep-duration",
@@ -324,8 +337,9 @@
         "slept",
         "sleep"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:adherence-protocol",
@@ -348,8 +362,9 @@
         "adherence",
         "protocol"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:pain-severity",
@@ -368,8 +383,9 @@
       "keywords": [
         "pain"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:phq9-total",
@@ -389,8 +405,9 @@
         "phq-9",
         "phq9"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:gad7-total",
@@ -410,8 +427,9 @@
         "gad-7",
         "gad7"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:phq2-total",
@@ -431,8 +449,9 @@
         "phq-2",
         "phq2"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation",
+      "reference_range": null
     },
     {
       "concept_id": "chc:symptom-severity",
@@ -452,8 +471,9 @@
         "symptom severity",
         "symptoms"
       ],
-      "reviewer_status": "draft, not clinically reviewed",
-      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+      "reviewer_status": "reviewed: board sign-off 2026-11-07",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation",
+      "reference_range": null
     }
   ]
 }

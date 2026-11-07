@@ -12,7 +12,7 @@ dependency on it (import order ``events`` ← ``ontology`` ← ``lhm``).
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -92,10 +92,15 @@ class EventLog:
     def ontology(self) -> Ontology:
         return self._ontology
 
-    def append(self, event: ActionEvent | SignalEvent) -> None:
+    def check(self, event: ActionEvent | SignalEvent, *, pending_ids: Collection[str] = ()) -> None:
+        """Raise exactly as :meth:`append` would, without storing anything.
+
+        ``pending_ids`` are ids a caller is about to append in the same batch, so a batch can be
+        validated in full before its first write.
+        """
         if not isinstance(event, (ActionEvent, SignalEvent)):
             raise TypeError(f"expected ActionEvent or SignalEvent, got {type(event).__name__}")
-        if event.event_id in self._ids:
+        if event.event_id in self._ids or event.event_id in pending_ids:
             raise ValueError(f"duplicate event_id {event.event_id!r}")
         if isinstance(event, SignalEvent):
             node = self._ontology.nodes.get(event.code)
@@ -105,6 +110,9 @@ class EventLog:
             lo, hi = node.value_range
             if not (math.isfinite(event.value) and lo <= event.value <= hi):
                 raise ValueError(f"signal value {event.value!r} outside {event.code} range [{lo}, {hi}]")
+
+    def append(self, event: ActionEvent | SignalEvent) -> None:
+        self.check(event)
         self._ids.add(event.event_id)
         self._by_member.setdefault(event.member_id, []).append(event)
 

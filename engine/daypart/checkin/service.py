@@ -7,9 +7,9 @@ Framework-free. Every refusal raises :class:`CheckinError`, which carries an HTT
   (text), or fixture lookup / upload intake. It stores a ``pending_review`` CheckIn and writes
   nothing to ``events`` or ``provenance`` (J1). A refusal leaves the journal exactly as it was.
 * :func:`review` is all-or-nothing under the journal lock: validate every decision, apply the
-  corrections, re-run flags over the kept set, build and pre-check every SignalEvent, and only
-  then write events, records and the ``saved`` status together. New events are dry-run on a
-  throwaway EventLog seeded with the journal's events; a commit that still fails mid-way rebuilds
+  corrections, re-run flags over the whole post-correction set, build and pre-check every SignalEvent, and only
+  then write events, records and the ``saved`` status together. New events are dry-run with
+  ``EventLog.check`` (no write) against the journal's log; a commit that still fails mid-way rebuilds
   the log from the prior events and is a 500 with nothing written.
 
 No message here ever names a ``plausible`` bound (T5.5): reasons are fixed codes.
@@ -33,7 +33,7 @@ from daypart.checkin.journal import Journal, ObservationRecord, Provenance
 from daypart.checkin.models import CheckIn, Proposal
 from daypart.checkin.tripwire import scan
 from daypart.governance import real_input
-from daypart.memory.events import EventLog, SignalEvent
+from daypart.memory.events import SignalEvent
 from daypart.memory.registry import REVIEWER_STATUS, Concept, load_registry
 
 MAX_TEXT_CHARS = 500
@@ -229,17 +229,6 @@ def _noon_utc(day: dt.date) -> dt.datetime:
     return dt.datetime.combine(day, dt.time(12), tzinfo=dt.UTC)
 
 
-def _dry_run(journal: Journal, prior: Sequence[Any]) -> EventLog:
-    """A throwaway ``EventLog`` on the journal's ontology, seeded with the journal's events.
-
-    Appending the new events here first runs exactly the checks ``EventLog.append`` makes
-    (duplicate ids, metric codes, value ranges), so the real log is only touched once all pass.
-    """
-    probe = EventLog(journal.ontology)
-    probe.extend(prior)
-    return probe
-
-
 def _invalid(pids: Iterable[str], reason: str) -> CheckinError:
     return CheckinError(422, "invalid_correction", proposals=[{"proposal_id": pid, "reasons": [reason]} for pid in pids])
 
@@ -277,15 +266,17 @@ async def review(
         if bad:
             raise CheckinError(422, "invalid_correction", proposals=bad)
 
-        # Corrections first, then flags re-run over the kept set (contradiction is a set property).
-        # Discarded and save_unmapped proposals are out of the set: they never become events.
+        # Corrections first, then flags re-run over the whole post-correction set (A&D 4.1, G17):
+        # contradiction is a set property and only a correction clears a flag, so a discarded or
+        # save_unmapped proposal still counts when the kept ones are re-checked. Only the kept
+        # (confirm/correct) proposals must come out unflagged: they are the ones that become events.
         edited = [_apply(p, by_id[p.proposal_id]) if by_id[p.proposal_id].action == "correct" else p
                   for p in proposals]
-        kept = [p for p in edited if by_id[p.proposal_id].action in ("confirm", "correct")]
         corrected = {p.proposal_id: by_id[p.proposal_id].corrected_fields()
-                     for p in kept if by_id[p.proposal_id].action == "correct"}
-        reflagged = {p.proposal_id: p for p in detect_flags(kept, corrected, today=journal.today)}
-        unresolved = [{"proposal_id": pid, "flags": list(p.flags)} for pid, p in reflagged.items() if p.blocking]
+                     for p in edited if by_id[p.proposal_id].action == "correct"}
+        reflagged = detect_flags(edited, corrected, today=journal.today)
+        unresolved = [{"proposal_id": p.proposal_id, "flags": list(p.flags)} for p in reflagged
+                      if p.blocking and by_id[p.proposal_id].action in ("confirm", "correct")]
         if unresolved:
             raise CheckinError(422, "unresolved_flags", proposals=unresolved)
 
@@ -296,7 +287,7 @@ async def review(
         discarded: list[str] = []
         n_event, n_record = journal.event_count, journal.record_count
         prior = journal.all_events()
-        probe = _dry_run(journal, prior)
+        pending_ids: set[str] = set()
         for p in edited:
             d = by_id[p.proposal_id]
             if d.action == "discard":
@@ -322,9 +313,13 @@ async def review(
                 except pydantic.ValidationError:
                     raise _invalid([p.proposal_id], "value_not_recordable") from None
                 try:
-                    probe.append(event)
+                    # Dry run: the checks EventLog.append makes (duplicate ids, metric codes, value
+                    # ranges), against the real log plus this batch, with no write, so the real log
+                    # is only touched once every event passes.
+                    journal.events.check(event, pending_ids=pending_ids)
                 except ValueError:
                     raise _invalid([p.proposal_id], "value_not_recordable") from None
+                pending_ids.add(event_id)
                 events.append(event)
                 written_pids.append(p.proposal_id)
             n_record += 1
@@ -352,7 +347,7 @@ async def review(
             )
         saved = checkin.mark_saved()
 
-        # Commit. Every event already passed a dry run on a log seeded with the journal's events.
+        # Commit. Every event already passed the dry run against the journal's log.
         appended = 0
         try:
             for event in events:
