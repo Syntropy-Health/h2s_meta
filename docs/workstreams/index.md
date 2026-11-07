@@ -1,3 +1,3 @@
 # Workstream dev docs
 
-- [daypart](daypart.md) — Daypart Engine; latest: slice G · 2.4 boundary eval (HAC-26)
+- [daypart](daypart.md) — Daypart Engine; latest: FHDIC P1 data core for the Clinical Human Clone (HAC-38)

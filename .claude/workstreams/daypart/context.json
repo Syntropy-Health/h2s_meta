@@ -1,14 +1,17 @@
 {
   "schema": 1,
   "workstream": "daypart",
-  "updated_at": "2026-11-07T00:37:25.439843+00:00",
+  "updated_at": "2026-11-07T01:37:05.632211+00:00",
   "linear": {
     "initiative_url": "",
     "initiative_id": ""
   },
   "paperclip": {
-    "parent": "",
-    "phases": {}
+    "parent": "HAC-30",
+    "phases": {
+      "design": "HAC-33",
+      "build": "HAC-38"
+    }
   },
   "github": {
     "repo": ""

@@ -1,5 +1,48 @@
 # daypart — dev doc
 
+## FHDIC P1 · Data core for the Clinical Human Clone (HAC-38)
+
+**Overview.** P1 builds the backend for the check-in → review loop of A&D HAC-33
+(`workstreams/daypart/AND.md`). Nothing the person enters reaches memory until they confirm it.
+Real-input mode exists only as a gate that always refuses. All inputs are synthetic.
+
+```mermaid
+flowchart LR
+  T[text ≤500] --> CR{crisis pre-check} -->|crisis| H[200 handoff, nothing stored]
+  CR --> PII{PII tripwire} -->|hit| R422[422 looks_like_personal_data]
+  PII --> X[rules-v1 extractor]
+  F[demo fixture / upload ≤1 MiB] --> S{magic bytes · sha256 allow-list} --> SC[sidecar extraction]
+  X --> P[(pending CheckIn<br/>proposals + blocking flags)]
+  SC --> P
+  P -->|review: all-or-nothing| V{corrections re-validated<br/>flags re-run}
+  V -->|confirm/correct| E[(EventLog core-v1+u1)]
+  V -->|save_unmapped| U[(provenance only)]
+  V -->|discard| D[gone]
+  G{{real-input gate<br/>REAL_INPUT_BUILD_ALLOWED=False}} -.-> T
+```
+
+**What changed.**
+- `memory/registry.py` + `registry_a4.json` + `loinc_verify_v1.csv`: 18 LOINC 2.83 codes and 2 local
+  ones in 3 verticals. `slice_ontology()` = `apply_update(core(), …)`, version `core-v1+u1`, adding
+  11 nodes; `core()` is unchanged. The LOINC notice is in ATTRIBUTION.
+- `governance/real_input.py` + YAML (12 gates, all open and unassigned), `/api/mode` (always 403),
+  and `docs/daypart/real-input-pathway.md`.
+- `checkin/`: proposal models, the rules-v1 text extractor with 7 blocking flags, the PII tripwire,
+  the crisis pre-check, fixture intake (4 synthetic fixtures + sidecars), per-visitor journals
+  (LRU 256, 60 min idle), and the review service (atomic, per-journal lock).
+- Routes: `POST /api/journals`, `GET /api/fixtures[/{id}]`, `POST /api/checkins` (JSON or
+  multipart, with a stream cap), `POST /api/checkins/{id}/review`,
+  `GET /api/journals/{j}/observations/{r}`. Modal `playground` runs with `max_containers=1`.
+
+**Key decisions** (plan G1–G12 and addendum G13).
+- 69725-0 failed LOINC verification (a single GAD item, not the GAD-2 total) and was dropped (D-A5).
+- The crisis pre-check owns its member-crisis lexicon, because boundary-v1 only carries reply handoff markers (G13).
+- An event value is stored in the canonical unit. The observation record keeps the value as recorded (e.g. 160 [lb_av]).
+- The review body may omit `journal_id`: check-ins map to their journal at the store level.
+
+**Run it**, from `engine/`: `uv run daypart-demo` (the FastAPI app), then use the routes above.
+Tests: `env -u MUSE_API_KEY uv run pytest -q`.
+
 ## Slice G · 2.4 boundary eval (HAC-26)
 
 **Overview.** Plan task 2.4 compares the 4-bit Muse Glimmer 30B base, base+SFT and base+DPO on held-out prompts. It
