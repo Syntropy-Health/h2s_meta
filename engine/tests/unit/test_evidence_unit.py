@@ -54,8 +54,8 @@ def a_source(**over) -> dict:
 def test_vetting_label_is_the_am1_label_and_never_clinical():
     assert VETTING == VETTING_LABEL
     ev = load_evidence()
-    assert ev.sources
-    for s in ev.sources:
+    assert ev.sources()
+    for s in ev.sources():
         assert s.vetting == VETTING_LABEL
         for text in (s.title, s.publisher, s.supports):
             low = text.lower()
@@ -63,7 +63,7 @@ def test_vetting_label_is_the_am1_label_and_never_clinical():
 
 
 def test_every_source_is_a_public_https_page_with_a_short_supports():
-    for s in load_evidence().sources:
+    for s in load_evidence().sources():
         u = urlparse(s.url)
         assert u.scheme == "https" and u.hostname and "." in u.hostname
         assert not u.hostname.endswith((".local", ".internal", ".lan")), s.url
@@ -76,20 +76,20 @@ def test_evidence_ids_are_unique_and_applies_to_resolves():
     data = raw_sources()["sources"]
     ids = [s["evidence_id"] for s in data]
     assert len(ids) == len(set(ids))
-    for s in load_evidence().sources:
+    for s in load_evidence().sources():
         assert s.applies_to
         for cid in s.applies_to:
             assert reg.by_concept_id(cid) is not None, cid
 
 
 def test_every_number_in_supports_traces_to_a_stated_range_of_its_entry():
-    for s in load_evidence().sources:
+    for s in load_evidence().sources():
         stated = set().union(*(numbers(r.statement) for r in s.stated_ranges)) if s.stated_ranges else set()
         assert numbers(s.supports) <= stated, s.evidence_id
 
 
 def test_every_stated_number_appears_in_its_statement():
-    for s in load_evidence().sources:
+    for s in load_evidence().sources():
         for r in s.stated_ranges:
             for bound in (r.low, r.high):
                 if bound is not None:
@@ -118,7 +118,7 @@ def test_every_reference_range_resolves_to_its_source_and_numbers():
 
 def test_every_stated_range_is_carried_by_its_concept():
     reg = load_registry()
-    for s in load_evidence().sources:
+    for s in load_evidence().sources():
         for r in s.stated_ranges:
             c = reg.by_concept_id(r.concept_id)
             assert c is not None and c.reference_range is not None
@@ -165,7 +165,7 @@ def test_for_concept_accepts_concept_id_or_code():
 def test_by_id_and_load_is_cached():
     ev = load_evidence()
     assert load_evidence() is ev
-    first = ev.sources[0]
+    first = ev.sources()[0]
     assert ev.by_id(first.evidence_id) is first
     assert ev.by_id("ev:missing") is None
 
@@ -277,7 +277,7 @@ def test_f7_url_must_be_a_public_name(url):
 
 
 def test_f7_shipped_urls_pass_the_hardened_validator():
-    for s in load_evidence().sources:
+    for s in load_evidence().sources():
         Source.model_validate({**s.model_dump(mode="json"), "url": s.url})
         assert urlparse(s.url).hostname in {"medlineplus.gov", "www.nhlbi.nih.gov", "www.who.int"}
 
@@ -315,3 +315,10 @@ def test_b6_a_code_without_a_concept_registry_is_refused_not_silently_empty():
     assert bare.for_concept("chc:heart-rate")  # concept ids need no registry
     with pytest.raises(ValueError, match="concept registry"):
         bare.for_concept("8867-4")
+
+
+def test_b9_sources_is_a_read_only_method_like_concepts():
+    ev = load_evidence()
+    with pytest.raises(AttributeError):
+        ev.sources = ()  # type: ignore[misc]
+    assert isinstance(ev.sources(), tuple) and ev.sources()

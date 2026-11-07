@@ -146,9 +146,12 @@ class EvidenceRegistry:
             if s.evidence_id in by_id:
                 raise ValueError(f"duplicate evidence_id {s.evidence_id!r}")
             by_id[s.evidence_id] = s
-        self.sources = sources
+        self._sources = sources
         self._by_id = MappingProxyType(by_id)
         self._concepts = concepts
+
+    def sources(self) -> tuple[Source, ...]:
+        return self._sources
 
     def by_id(self, evidence_id: str) -> Source | None:
         return self._by_id.get(evidence_id)
@@ -163,7 +166,7 @@ class EvidenceRegistry:
             if c is None:
                 return ()
             concept_id = c.concept_id
-        return tuple(s for s in self.sources if concept_id in s.applies_to)
+        return tuple(s for s in self._sources if concept_id in s.applies_to)
 
 
 def check_reference_ranges(concepts: ConceptRegistry, evidence: EvidenceRegistry) -> None:
@@ -180,7 +183,7 @@ def check_reference_ranges(concepts: ConceptRegistry, evidence: EvidenceRegistry
             rr.low, rr.high, rr.unit, rr.population
         ):
             raise ValueError(f"{c.concept_id}: reference_range is not stated by {src.evidence_id}")
-    for s in evidence.sources:
+    for s in evidence.sources():
         for cid in s.applies_to:
             if concepts.by_concept_id(cid) is None:
                 raise ValueError(f"{s.evidence_id}: applies_to {cid!r} is not a registry concept")
