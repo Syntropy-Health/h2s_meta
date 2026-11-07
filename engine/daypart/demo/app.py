@@ -39,11 +39,6 @@ class StepIn(BaseModel):
     text: str | None = Field(None, max_length=2000)  # None -> the intent's boundary-safe default
 
 
-class ModeIn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    real_input: bool
-
-
 def _gate_view(gates: tuple[real_input.Gate, ...]) -> list[dict]:
     return [{"id": g.id, "label": g.label, "owner": g.owner} for g in gates]
 
@@ -95,8 +90,9 @@ def create_app(cohort_seed: int = 0, results_url: str | None = None) -> FastAPI:
         }
 
     @app.post("/api/mode")
-    def set_mode(body: ModeIn) -> JSONResponse:
-        # Always refused, whatever the requested value (A&D API table: "always").
+    def set_mode() -> JSONResponse:
+        # Always refused, whatever the body (A&D API table: "always"). The body is never parsed, so a
+        # malformed or empty request gets the same 403 refusal shape instead of a 422.
         refused = real_input.request_enable()
         return JSONResponse(
             status_code=403,

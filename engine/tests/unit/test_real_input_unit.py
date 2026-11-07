@@ -170,8 +170,37 @@ def test_t9_1_post_mode_always_403(client, flag):
     assert [g["id"] for g in body["open_gates"]] == list(GATE_IDS)
 
 
-def test_post_mode_rejects_extra_fields(client):
-    assert client.post("/api/mode", json={"real_input": True, "force": True}).status_code == 422
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"json": {"real_input": True, "force": True}},
+        {"json": {}},
+        {"json": {"real_input": "yes"}},
+        {"json": [1, 2]},
+        {"content": b"not json", "headers": {"content-type": "application/json"}},
+        {},
+    ],
+)
+def test_post_mode_refuses_any_body_with_the_403_shape(client, kwargs):
+    # QG P1.2 A1: the A&D says POST /api/mode is 403 "always", malformed bodies included.
+    r = client.post("/api/mode", **kwargs)
+    assert r.status_code == 403
+    body = r.json()
+    assert body["error"] == "real_input_refused"
+    assert body["reason"] == "build_disallowed"
+    assert len(body["open_gates"]) == 12
+
+
+def test_closed_gate_requires_named_owner_and_evidence_url():
+    # QG P1.2 A4: §4.9, a closed item names its owner and links evidence.
+    with pytest.raises(ValidationError):
+        real_input.Gate(id="consent", label="Consent", status="closed", owner="unassigned", evidence="https://example.org/e")
+    with pytest.raises(ValidationError):
+        real_input.Gate(id="consent", label="Consent", status="closed", owner="A. Owner", evidence=None)
+    with pytest.raises(ValidationError):
+        real_input.Gate(id="consent", label="Consent", status="closed", owner="A. Owner", evidence="ftp://x")
+    g = real_input.Gate(id="consent", label="Consent", status="closed", owner="A. Owner", evidence="https://example.org/e")
+    assert g.status == "closed"
 
 
 def test_t9_2_env_requested_starts_in_demo_and_logs_once(monkeypatch, caplog):
