@@ -12,6 +12,7 @@ from datetime import timedelta
 
 import pydantic
 import pytest
+
 from daypart.checkin.crisis import HANDOFF_TEXT, is_crisis
 from daypart.checkin.extract_text import detect_flags, extract
 from daypart.checkin.models import FLAGS, METHOD_FIXTURE, METHOD_TEXT, CheckIn, Proposal
