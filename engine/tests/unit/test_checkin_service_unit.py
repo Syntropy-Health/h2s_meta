@@ -364,7 +364,7 @@ def test_t4_2_correct_with_valid_values_200(client):
 
 
 def test_contradiction_cleared_by_discarding_one_side(client):
-    jid, ck = _pending(client, "slept 6 hours and slept 7 hours")
+    _jid, ck = _pending(client, "slept 6 hours and slept 7 hours")
     bad = _review(client, ck["checkin_id"], [
         {"proposal_id": "p-1", "action": "confirm"},
         {"proposal_id": "p-2", "action": "correct", "value": 6},
@@ -562,7 +562,7 @@ def test_correction_at_window_edge_accepted(client):
 
 
 def test_correct_on_unknown_concept_is_invalid(client):
-    jid, ck = _pending(client, "headache")
+    _jid, ck = _pending(client, "headache")
     r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "correct", "value": 3}])
     assert r.status_code == 422 and r.json()["error"] == "invalid_correction"
 
