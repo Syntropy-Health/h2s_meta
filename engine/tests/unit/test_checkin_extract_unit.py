@@ -697,3 +697,58 @@ def test_detect_flags_window_needs_today() -> None:
     corrected = {p.proposal_id: frozenset({"date"})}
     assert detect_flags((old,), corrected, today=TODAY)[0].flags == ("ambiguous_date",)
     assert detect_flags((old.with_changes(date=TODAY),), corrected, today=TODAY)[0].flags == ()
+
+
+# --- QG-P1.6 bug-exposing tests ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text", ["I called 988 hours ago", "should i call 988 in?", "988 c'mon", "call 988 h", "I texted 988 min ago"]
+)
+def test_qg_p16_1_988_exemption_only_for_measurement_units(text: str) -> None:
+    assert is_crisis(text) is True
+
+
+@pytest.mark.parametrize(
+    "text", ["I called 988—they helped", "988-they helped", "the crisis line's staff", "988's counselor",
+             "I called emergency services–they came"]
+)
+def test_qg_p16_2_marker_next_to_dash_or_apostrophe(text: str) -> None:
+    assert is_crisis(text) is True
+
+
+@pytest.mark.parametrize("text", ["988,000 steps", "1.988 kg", "9880 steps"])
+def test_qg_p16_2_marker_quiet_inside_numbers(text: str) -> None:
+    assert is_crisis(text) is False
+
+
+@pytest.mark.parametrize(
+    "text", ["I wanna end it", "I want to end it right now", "I need to end it", "I wish I wasn't alive",
+             "I wish I were not alive", "I don't feel safe right now"]
+)
+def test_qg_p16_3_end_it_and_not_alive_families(text: str) -> None:
+    assert is_crisis(text) is True
+
+
+@pytest.mark.parametrize("text", ["I called 911 last night", "calling 911 now", "I dialed 911", "walked 988 steps then I called 911",
+                                  "I had to dial 9-1-1"])
+def test_qg_p16_4_called_911(text: str) -> None:
+    assert is_crisis(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["taking my life back, walked 5000 steps", "I cut myself chopping onions, pain 3/10",
+     "wish this headache would disappear forever", "the point of living well is sleep 8h",
+     "going to end it nowhere near midnight", "I'm going to end it soonish with the gym"],
+)
+def test_qg_p16_7_lookalikes_quiet(text: str) -> None:
+    assert is_crisis(text) is False
+
+
+def test_unit_at() -> None:
+    from daypart.checkin.extract_text import unit_at
+
+    assert unit_at("988 steps", 3) == "{steps}" and unit_at("988steps", 3) == "{steps}"
+    assert unit_at("98 bpm", 2) == "/min"
+    assert unit_at("988 for", 3) is None and unit_at("988", 3) is None

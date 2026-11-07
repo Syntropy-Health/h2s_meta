@@ -31,6 +31,10 @@ _MARKER_RES = tuple(
     re.compile(r"(?<![\w.,'-])" + r"\s+".join(map(re.escape, dsl.normalize(m).split())) + r"(?![\w'-]|[.,]\d)")
     for m in CRISIS_MARKERS
 )
+# A numeric marker followed by one of these is a measurement ("walked 988 steps"), not a hand-off.
+# Only units a bare count of 988 can plausibly carry: time and temperature units ("988 hours ago",
+# "988 in?", "988 c'mon") stay crisis hits (QG-P1.6-1).
+_MEASUREMENT_UNITS = frozenset({"{steps}", "kg", "[lb_av]", "cm", "/min", "%", "mm[Hg]", "kg/m2"})
 
 #: Member crisis language: small regex families (name, pattern) matched over normalised text.
 CRISIS_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -74,7 +78,7 @@ def is_crisis(text: str) -> bool:
         return True
     for rx in _MARKER_RES:
         for m in rx.finditer(norm):
-            if not (m.group().isdigit() and unit_at(norm, m.end()) is not None):
+            if not (m.group().isdigit() and unit_at(norm, m.end()) in _MEASUREMENT_UNITS):
                 return True
     return False
 
