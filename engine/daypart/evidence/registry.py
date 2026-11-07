@@ -82,8 +82,12 @@ class StatedRange(pydantic.BaseModel):
                 raise ValueError("stated bounds must be finite")
             if bound not in stated:
                 raise ValueError(f"bound {bound} does not appear in the source statement")
-        if self.low is not None and self.high is not None and not self.low < self.high:
-            raise ValueError("stated low must be below high")
+        if self.low is not None and self.high is not None:
+            if not self.low < self.high:
+                raise ValueError("stated low must be below high")
+            at = [float(m.group()) for m in _NUMBER.finditer(self.statement)]
+            if at.index(self.low) > max(i for i, n in enumerate(at) if n == self.high):
+                raise ValueError("the low bound must come before the high bound in the statement")
         return self
 
 

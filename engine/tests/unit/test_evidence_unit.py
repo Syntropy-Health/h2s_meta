@@ -322,3 +322,9 @@ def test_b9_sources_is_a_read_only_method_like_concepts():
     with pytest.raises(AttributeError):
         ev.sources = ()  # type: ignore[misc]
     assert isinstance(ev.sources(), tuple) and ev.sources()
+
+
+def test_b1_low_must_come_before_high_in_the_statement():
+    with pytest.raises(pydantic.ValidationError, match="low bound must come before"):
+        StatedRange.model_validate({**HR_RANGE, "statement": "Pulse: 100 at most, 60 at least"})
+    assert StatedRange.model_validate(HR_RANGE).low == 60
