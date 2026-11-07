@@ -629,7 +629,7 @@ def test_t5_3_observation_records_confirmed_and_unmapped(client):
         assert set(rec["provenance"]) == PROVENANCE_FIELDS
         assert rec["provenance"]["checkin_id"] == ck["checkin_id"]
         assert rec["provenance"]["method"] == "rules-v1"
-        assert rec["reviewer_status"] == "draft, not clinically reviewed"
+        assert rec["reviewer_status"] == "reviewed: board sign-off 2026-11-07"
         assert rec["allowed_use"]
     assert m["status"] == "mapped" and m["quality"] == "confirmed"
     assert m["loinc_code"] == "93832-4" and m["loinc_version"] == "2.83"
@@ -842,6 +842,27 @@ def test_review_append_failing_mid_commit_is_500_and_nothing_written(client, mon
     ])
     assert ok.status_code == 200, ok.text
     assert len(j.events) == 3
+
+
+def test_review_appends_each_saved_event_exactly_once(client, monkeypatch):
+    # The dry run validates without EventLog.append: one append per saved value, nothing else.
+    from daypart.memory.events import EventLog
+
+    jid, ck = _pending(client, "slept 6 hours and walked 8000 steps")
+    real_append = EventLog.append
+    seen = []
+
+    def counting(self, event):
+        seen.append(event.event_id)
+        return real_append(self, event)
+
+    monkeypatch.setattr(EventLog, "append", counting)
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "confirm"},
+    ])
+    monkeypatch.undo()
+    assert r.status_code == 200, r.text
+    assert seen == r.json()["written"] and len(seen) == 2
 
 
 def test_review_dry_run_refuses_a_duplicate_event_id_before_any_write(client):

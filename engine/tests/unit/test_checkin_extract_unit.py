@@ -549,7 +549,29 @@ def test_p2_crisis_families_detected(text: str) -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ["dead tired after work", "reading about harm reduction", "my rent is overdue", "self-harmony yoga class",
+    [
+        # passive ideation (screening wording: wish to be dead, go to sleep and not wake up)
+        "I wish I could go to sleep and not wake up", "sometimes I hope I don't wake up",
+        "I want to disappear forever", "I don't want to be here anymore", "I don't want to exist",
+        "everyone would be better off without me", "I'd be better off gone",
+        "there's no point in living", "life isn't worth living", "what's the point of living",
+        # active ideation and method / plan
+        "I've been having thoughts of killing myself", "thinking about taking my own life",
+        "I want to take my life", "I want to hang myself", "I'm going to jump off the bridge",
+        "I have a plan to end it", "I'm planning to end it tonight", "I'm going to end it",
+        "I want to cut myself", "I tried to kill myself last year", "I've attempted suicide",
+        "I'm not safe right now", "I can't keep myself safe", "I'm going to hurt myself tonight",
+        "I can't take it anymore, I want to die",
+    ],
+)
+def test_am_crisis_screening_families_detected(text: str) -> None:
+    assert is_crisis(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["dead tired after work", "reading about harm reduction", "the meeting will end it early",
+     "I'm planning to end the call at 5", "jumped off the curb", "I cut my hair", "point of view", "my rent is overdue", "self-harmony yoga class",
      "pain 4/10", "I'm dying to try the new trail", "the battery will die soon", "end of my shift"],
 )
 def test_p2_crisis_quiet_on_lookalikes(text: str) -> None:

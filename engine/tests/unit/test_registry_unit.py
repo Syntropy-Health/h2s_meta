@@ -13,6 +13,7 @@ from daypart.memory.ontology import CORE_CAVEATS, LOINC_SYSTEM, apply_update, co
 from daypart.memory.registry import (
     LOINC_NOTICE,
     LOINC_VERSION,
+    REVIEWER_STATUS,
     SLICE_VERSION,
     Concept,
     load_registry,
@@ -27,7 +28,7 @@ NEW_LOINC = {
     "41950-7", "55411-3", "55758-7",
 }
 VERTICALS = ("vitals_body", "behaviour_function", "symptoms_wellbeing")
-REVIEWER = "draft, not clinically reviewed"
+REVIEWER = "reviewed: board sign-off 2026-11-07"  # AM-1 (board answer on A3)
 T0 = datetime(2026, 1, 1, 12, tzinfo=UTC)
 
 
@@ -158,6 +159,8 @@ def test_concept_model_validation():
     with pytest.raises(pydantic.ValidationError):
         Concept(**{**good, "reviewer_status": "clinically reviewed"})
     with pytest.raises(pydantic.ValidationError):
+        Concept(**{**good, "reviewer_status": "draft, not clinically reviewed"})  # superseded by AM-1
+    with pytest.raises(pydantic.ValidationError):
         Concept(**{**good, "loinc_version": None})
     with pytest.raises(pydantic.ValidationError):
         Concept(**{**good, "system": "local", "code": "dp:x"})  # local must not carry a version
@@ -232,3 +235,42 @@ def test_cached_concept_alt_units_cannot_be_mutated():
         c.alt_units["x"] = 1.0  # type: ignore[index]
     assert "x" not in load_registry().by_code("29463-7").alt_units
     assert c.model_dump(mode="json")["alt_units"]["[lb_av]"] == pytest.approx(0.45359237)
+
+
+# ---------------------------------------------------------------- AM-1: reference ranges
+
+
+def test_am1_label_is_honest():
+    assert REVIEWER_STATUS == REVIEWER
+    assert "clinically" not in REVIEWER_STATUS.casefold() and "clinician" not in REVIEWER_STATUS.casefold()
+
+
+def test_am1_every_concept_carries_reference_range_null_without_a_source():
+    # No source registry ships in P1 (sources_v1.json is P2 task 6), so no range is sourced yet: AM-1
+    # item 2 says an unsourced range stays null. The key is always present in the dumped concept.
+    for c in load_registry().concepts():
+        assert c.reference_range is None
+        assert "reference_range" in c.model_dump() and c.model_dump()["reference_range"] is None
+
+
+def test_am1_reference_range_model():
+    good = load_registry().by_code("8480-6").model_dump()
+    rr = {"low": 90, "high": 120, "unit": "mm[Hg]", "population": "adults", "source_evidence_id": "ev-x"}
+    c = Concept(**{**good, "reference_range": rr})
+    assert c.reference_range is not None and c.reference_range.low == 90 and c.reference_range.unit == "mm[Hg]"
+    assert c.model_dump()["reference_range"] == {**rr, "low": 90.0, "high": 120.0}
+    for bad in (
+        {**rr, "low": 120, "high": 90},  # low must be below high
+        {**rr, "low": float("nan")},
+        {**rr, "unit": "mmHg"},  # must be the concept's unit or one of its alt_units
+        {**rr, "population": ""},
+        {**rr, "source_evidence_id": ""},  # AM-1: a range without a source is not allowed
+        {k: v for k, v in rr.items() if k != "source_evidence_id"},
+        {**rr, "extra": 1},
+    ):
+        with pytest.raises(pydantic.ValidationError):
+            Concept(**{**good, "reference_range": bad})
+    one_sided = Concept(**{**good, "reference_range": {**rr, "low": None}})
+    assert one_sided.reference_range.low is None  # a guideline may state only an upper bound
+    with pytest.raises(pydantic.ValidationError):
+        Concept(**{**good, "reference_range": {**rr, "low": None, "high": None}})
