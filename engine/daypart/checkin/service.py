@@ -36,6 +36,10 @@ from daypart.memory.events import EventLog, SignalEvent
 from daypart.memory.registry import REVIEWER_STATUS, Concept, load_registry
 
 MAX_TEXT_CHARS = 500
+# Hard bound on the raw text, checked before any normalisation (NFKC can expand one character to
+# 18, so normalising an unbounded body blocks the loop). Generous (4x) so crisis wording in a
+# slightly long text still reaches the crisis pre-check and gets the handoff.
+MAX_RAW_TEXT_CHARS = 4 * MAX_TEXT_CHARS
 WINDOW_DAYS = 28
 PII_WARNING = "Do not enter real health data."
 NOTHING_EXTRACTED_HINT = "try e.g. 'slept 7 hours'"
@@ -114,6 +118,8 @@ def create_checkin(
     proposals: tuple[Proposal, ...]
     if has_text:
         assert text is not None
+        if len(text) > MAX_RAW_TEXT_CHARS:  # before is_crisis: never normalise an unbounded body
+            raise CheckinError(422, "text_too_long")
         # Crisis language gets the handoff even in an over-long text: safety before validation.
         if is_crisis(text):
             return {"status": "handoff", "text": HANDOFF_TEXT}
@@ -371,6 +377,7 @@ def observation(journal: Journal, record_id: str) -> dict[str, Any]:
 
 
 __all__ = [
+    "MAX_RAW_TEXT_CHARS",
     "MAX_TEXT_CHARS",
     "NOTHING_EXTRACTED_HINT",
     "NOT_A_DEMO_FIXTURE_MESSAGE",

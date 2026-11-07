@@ -894,3 +894,28 @@ def test_idle_eviction_via_http_review_is_unknown_journal(monkeypatch):
         r = _review(c, ck["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}])
         assert r.status_code == 404 and r.json()["error"] == "unknown_journal"
         assert c.get(f"/api/journals/{jid}/observations/obs-1").json()["error"] == "unknown_journal"
+
+
+# --- QG-P1-H2: a hard raw-length bound before any normalisation -----------------------------------
+
+
+def test_huge_text_refused_before_normalisation_fast(cohort):
+    import time
+
+    j = JournalStore(cohort).create("syn-002")
+    text = "ﷺ" * 349_000  # NFKC expands each U+FDFA to 18 characters
+    t0 = time.perf_counter()
+    with pytest.raises(CheckinError) as e:
+        service.create_checkin(j, text=text)
+    elapsed = time.perf_counter() - t0
+    assert e.value.status == 422 and e.value.body["error"] == "text_too_long"
+    assert elapsed < 0.2, elapsed
+    _assert_no_bounds(e.value.body)
+    assert j.checkins == {} and len(j.events) == 0
+
+
+def test_crisis_text_slightly_over_500_still_gets_handoff(cohort):
+    j = JournalStore(cohort).create("syn-002")
+    text = "x " * 400 + "i want to die"
+    assert 500 < len(text) <= service.MAX_RAW_TEXT_CHARS
+    assert service.create_checkin(j, text=text)["status"] == "handoff"
