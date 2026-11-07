@@ -5,10 +5,10 @@ An extractor turns one check-in source into proposals. Every extractor — ``rul
 service passes its output through :func:`validate_proposals` before anything reaches the journal.
 
 Contract for a model-backed extractor (none exists in this build; no live model is called): ask the
-model for structured output in the ``Proposal`` JSON schema (``Proposal.model_json_schema()``), then
-``Proposal.model_validate`` each item. ``extra="forbid"`` refuses any field the schema lacks (a risk
-score, an interpretation), so a model cannot widen what is shown. Flags still come from
-``detect_flags``; a model never sets ``blocking``.
+model for structured output covering the ``Proposal`` fields except ``flags`` and ``blocking`` (the
+model never sets them), build each item with ``Proposal.model_validate``, then run ``detect_flags``,
+as both current extractors do. ``extra="forbid"`` refuses any field the schema lacks (a risk score,
+an interpretation), so a model cannot widen what is shown.
 """
 
 from __future__ import annotations

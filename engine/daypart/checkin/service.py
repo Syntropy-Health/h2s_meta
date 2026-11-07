@@ -4,7 +4,7 @@ Framework-free. Every refusal raises :class:`CheckinError`, which carries an HTT
 ``body`` with ``"error"`` at the top level; the HTTP layer only serialises it.
 
 * :func:`create_checkin` runs gate -> shape checks -> crisis pre-check -> PII tripwire -> extract
-  (text), or fixture lookup / upload intake. It stores a ``pending_review`` CheckIn and writes
+  (text), or fixture lookup / upload intake, then validates the extractor output (G21). It stores a ``pending_review`` CheckIn and writes
   nothing to ``events`` or ``provenance`` (J1). A refusal leaves the journal exactly as it was.
 * :func:`review` is all-or-nothing under the journal lock: validate every decision, apply the
   corrections, re-run flags over the whole post-correction set, build and pre-check every SignalEvent, and only

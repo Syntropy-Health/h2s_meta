@@ -62,7 +62,7 @@ def main() -> None:
 
     st.subheader("All arms")
     table = pd.DataFrame(doc.arm_table())
-    table["status"] = table["status"].map(STATUS_LABEL)  # pyright: ignore[reportArgumentType]  # pandas-stubs: a dict mapper is valid
+    table["status"] = table["status"].map(STATUS_LABEL)  # pyright: ignore[reportArgumentType]  # pandas typing: a dict mapper is valid
     st.dataframe(table, hide_index=True, use_container_width=True)
 
     rows = env_rows(doc)
@@ -131,7 +131,7 @@ def _training_panel(directory) -> None:
     elif stages is not None and not stages.empty:
         k = st.columns(len(stages) * 2)
         for i, row in enumerate(stages.itertuples()):
-            r: Any = row  # itertuples() yields named tuples whose fields pandas-stubs cannot see
+            r: Any = row  # itertuples() yields named tuples whose fields pandas' typing cannot see
             k[2 * i].metric(f"{r.stage.upper()} steps", f"{r.steps:,}", help=f"{r.rows:,} rows")
             k[2 * i + 1].metric(f"{r.stage.upper()} time · peak GPU", f"{r.train_minutes} min · {r.peak_gpu_gb} GB")
         st.dataframe(stages, hide_index=True, use_container_width=True)

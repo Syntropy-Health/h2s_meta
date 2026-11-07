@@ -195,7 +195,7 @@ New code lives under `engine/daypart/`. Existing modules are extended, never for
 | Text extractor | `checkin/extract_text.py` | `extract(text, today) -> list[Proposal]` | check-in service | registry |
 | Fixture intake | `checkin/fixtures.py` + `demo/fixtures/*` | allow-list by sha256, size and type checks, sidecar extraction | check-in service | registry |
 | Extractor boundary | `checkin/extractor.py` | `Extractor` protocol; `validate_proposals(output) -> tuple[Proposal, ...]` (§4.1 contract) | check-in service | models |
-| Check-in service | `checkin/service.py` | `create_checkin` (gate → crisis check → PII tripwire → extract), `review` (all-or-nothing), state machine | app | journal, extractors, tripwire, crisis, gate |
+| Check-in service | `checkin/service.py` | `create_checkin` (gate → crisis check → PII tripwire → extract → validate, G21), `review` (all-or-nothing), state machine | app | journal, extractors, tripwire, crisis, gate |
 | Journal | `checkin/journal.py` | Per-visitor clone: member profile ref, `EventLog`, `ProvenanceStore`, `MemoryLhm`, synthetic clock | service, passport view, next step | `memory.events`, `memory.lhm`, `simmember` |
 | Evidence registry | `evidence/registry.py` + `evidence/sources_v1.json` | `Source` entries, `for_concept(code)` | passport view | — |
 | Passport view | `passport/view.py` | `health_clone_passport(journal, as_of) -> HealthClonePassport` (observation cards + existing LHM flags + inventory) | app | `passport.render`, registry, evidence, journal |
@@ -213,7 +213,7 @@ New code lives under `engine/daypart/`. Existing modules are extended, never for
 | `GET /api/mode` | — | `{"mode":"demo","real_input":{"enabled":false,"requested":bool,"open_gates":[{id,label,owner}]}}` | — |
 | `POST /api/mode` | `{"real_input": true}` | never | `403 {"error":"real_input_refused","open_gates":[…],"reason":"build_disallowed"}` (always) |
 | `POST /api/journals` | `{"member_id": "syn-NNN"}` | `201 {"journal_id", "member_id", "today"}` | 404 unknown or curated member |
-| `POST /api/checkins` | `{"journal_id", "text"?: ≤500 chars, "fixture_id"?}`, or multipart `file` + `journal_id` | `201 {"checkin_id","status":"pending_review","proposals":[Proposal]}` | 404 journal; 413 `too_large`; 415 `unsupported_type`; 422 `not_a_demo_fixture` / `looks_like_personal_data` (reasons listed) / `empty_checkin` / `nothing_extracted` |
+| `POST /api/checkins` | `{"journal_id", "text"?: ≤500 chars, "fixture_id"?}`, or multipart `file` + `journal_id` | `201 {"checkin_id","status":"pending_review","proposals":[Proposal]}` | 404 journal; 413 `too_large`; 415 `unsupported_type`; 422 `not_a_demo_fixture` / `looks_like_personal_data` (reasons listed) / `empty_checkin` / `nothing_extracted`; 500 `extractor_output_invalid` (G21) |
 | `POST /api/checkins/{id}/review` | `{"decisions":[{"proposal_id","action":"confirm\|correct\|discard\|save_unmapped","value"?,"unit"?,"date"?}]}` | `200 {"status":"saved","written":[event_id],"discarded":[proposal_id]}` | 404; 409 `already_saved`; 422 `unresolved_flags` (per proposal) / `missing_decision` / `invalid_correction` |
 | `GET /api/journals/{id}/observations/{record_id}` | — | `200 ObservationRecord` (mapped or unmapped) | 404 unknown journal or record |
 | `GET /api/journals/{id}/passport` | `?day=` | `200 HealthClonePassport` | 404 |
@@ -270,8 +270,9 @@ passes each extractor's output through `validate_proposals`, which dumps and rev
 with `Proposal.model_validate` (`extra="forbid"`, so a field the schema lacks, such as a risk score,
 is refused; `model_construct` cannot bypass it) and refuses duplicate `proposal_id`s. Malformed
 output is a 500 `extractor_output_invalid`: no CheckIn is created and nothing reaches the journal.
-Any future model-backed extractor must request structured output in `Proposal.model_json_schema()`
-and `model_validate` each item; flags still come from `detect_flags`, never from the model.
+Any future model-backed extractor asks the model for structured output covering the `Proposal`
+fields except `flags` and `blocking` (the model never sets them), builds each `Proposal` with
+`model_validate`, and then runs `detect_flags`, as both current extractors do.
 
 ### 4.2 Journal (per visitor, `checkin/journal.py`)
 
