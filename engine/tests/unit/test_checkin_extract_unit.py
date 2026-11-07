@@ -446,3 +446,11 @@ def test_p1_regexes_are_linear_on_pathological_input(text: str) -> None:
     t0 = time.perf_counter()
     extract(text, TODAY)
     assert time.perf_counter() - t0 < 0.2
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["I was born 12 May 1985", "born 3/4/1990", "born on 3 March 1985", "born in 1985", "Born: 1990-01-01"],
+)
+def test_p3_born_without_on_or_in_is_date_of_birth(text: str) -> None:
+    assert "date_of_birth" in scan(text)

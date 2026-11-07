@@ -28,7 +28,7 @@ _DATE = (
     rf"{_MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?|(?:19|20)\d{{2}}\b)"
 )
 _DOB = re.compile(
-    rf"\b(?:born\s+(?:on|in)|dob|d\.o\.b\.?|date\s+of\s+birth|birthday)\b"
+    rf"\b(?:born|dob|d\.o\.b\.?|date\s+of\s+birth|birthday)\b"
     # Atomic and bounded: an unbounded ``(?:\s*…(?:is|was|on|in)\b)*`` backtracks exponentially.
     rf"(?>\s*+[:=-]?\s*+(?:is|was|on|in)\b){{0,3}}\s*+[:=-]?\s*{_DATE}",
     re.IGNORECASE,
