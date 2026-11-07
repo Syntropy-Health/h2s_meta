@@ -303,3 +303,8 @@ def test_b3_stated_range_copy_is_checked(field, text):
     bad = {**HR_RANGE, field: f"{text} 60 to 100" if field == "statement" else text}
     with pytest.raises(pydantic.ValidationError, match="copy may not say"):
         StatedRange.model_validate(bad)
+
+
+def test_b5_for_concept_takes_code_by_keyword_as_the_ad_names_it():
+    ev = load_evidence()
+    assert ev.for_concept(code="8867-4") == ev.for_concept("chc:heart-rate") != ()

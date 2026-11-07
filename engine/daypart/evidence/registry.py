@@ -153,11 +153,11 @@ class EvidenceRegistry:
     def by_id(self, evidence_id: str) -> Source | None:
         return self._by_id.get(evidence_id)
 
-    def for_concept(self, concept: str) -> tuple[Source, ...]:
-        """Sources that apply to ``concept``: a concept_id (``chc:…``) or, with a registry, its code."""
-        concept_id = concept
-        if not concept.startswith("chc:") and self._concepts is not None:
-            c = self._concepts.by_code(concept)
+    def for_concept(self, code: str) -> tuple[Source, ...]:
+        """Sources that apply to ``code``: a concept_id (``chc:…``) or, with a registry, its LOINC/local code."""
+        concept_id = code
+        if not code.startswith("chc:") and self._concepts is not None:
+            c = self._concepts.by_code(code)
             if c is None:
                 return ()
             concept_id = c.concept_id
