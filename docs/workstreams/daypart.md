@@ -40,7 +40,8 @@ flowchart LR
 - An event value is stored in the canonical unit. The observation record keeps the value as recorded (e.g. 160 [lb_av]).
 - The review body may omit `journal_id`: check-ins map to their journal at the store level.
 
-**Run it**, from `engine/`: `uv run daypart-demo` (the FastAPI app), then use the routes above.
+**Run it**, from `engine/`: `uv run daypart-demo serve` (the FastAPI app; optional `--host`, `--port`,
+`--cohort-seed`, default 127.0.0.1:8000), then use the routes above.
 Tests: `env -u MUSE_API_KEY uv run pytest -q`.
 
 ## Slice G · 2.4 boundary eval (HAC-26)

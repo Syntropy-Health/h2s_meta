@@ -1,6 +1,7 @@
 # daypart — usage
 
-What you can do with the hosted demo API now (synthetic data only; not medical advice).
+What you can do with the demo API (synthetic data only; not medical advice). These routes go live on
+the hosted demo once P1 is deployed to staging; until then, run the demo locally.
 
 ## Clinical Human Clone: check in and review (FHDIC P1)
 
@@ -15,8 +16,9 @@ What you can do with the hosted demo API now (synthetic data only; not medical a
    whole. Crisis language gets a fixed message pointing to a person and to emergency services.
 3. **Review** every proposal: `POST /api/checkins/{id}/review {"decisions": [...]}`, with one
    `confirm`, `correct`, `discard` or `save_unmapped` per proposal. A flagged proposal (an assumed
-   unit, an ambiguous date, a contradiction, an unknown word…) must be corrected, discarded or saved
-   as unmapped before it can be confirmed. The review saves everything or nothing.
+   unit, an ambiguous date, a contradiction…) must be corrected, discarded or saved as unmapped
+   before it can be confirmed. An unknown word has nothing to correct it to: it can only be
+   discarded or saved as unmapped. The review saves everything or nothing.
 4. **Inspect** a saved value: `GET /api/journals/{journal_id}/observations/{record_id}` shows its
    code, LOINC version, source, method, quality and allowed use.
 
