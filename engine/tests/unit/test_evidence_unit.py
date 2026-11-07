@@ -383,3 +383,10 @@ def test_f5_applies_to_an_unknown_concept_is_refused():
     ev = EvidenceRegistry((Source.model_validate(a_source(applies_to=["chc:heart-rate", "chc:no-such"])),))
     with pytest.raises(ValueError, match="applies_to 'chc:no-such' is not a registry concept"):
         check_reference_ranges(_registry_with(None), ev)
+
+
+@pytest.mark.parametrize("field", ["title", "publisher", "supports"])
+@pytest.mark.parametrize("text", ["Clinically Reviewed page", "A vetted source"])
+def test_f6_forbidden_review_copy_is_refused(field, text):
+    with pytest.raises(pydantic.ValidationError, match="copy may not say"):
+        Source.model_validate(a_source(**{field: text}))
