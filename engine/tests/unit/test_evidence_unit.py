@@ -370,3 +370,10 @@ def test_f2_a_range_that_differs_from_its_stated_range_is_refused(rr_over):
 def test_f3_duplicate_applies_to_and_ranges(over, msg):
     with pytest.raises(pydantic.ValidationError, match=msg):
         Source.model_validate(a_source(**over))
+
+
+def test_f4_a_stated_range_cited_to_another_source_is_refused():
+    rr = ReferenceRange(low=60, high=100, unit="/min", population="adults", source_evidence_id="ev:a")
+    ev = EvidenceRegistry((_hr_source("ev:a"), _hr_source("ev:b")))
+    with pytest.raises(ValueError, match="chc:heart-rate: stated by ev:b but not carried"):
+        check_reference_ranges(_registry_with(rr), ev)
