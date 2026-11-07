@@ -28,7 +28,9 @@ from daypart.membrane import dsl
 #: The rule pack's crisis hand-off vocabulary, reused as-is (A&D failure row 1).
 CRISIS_MARKERS: tuple[str, ...] = tuple(dsl.load_rules(dsl.RULE_VERSION).crisis_markers)
 _MARKER_RES = tuple(
-    re.compile(r"(?<![\w.,'-])" + r"\s+".join(map(re.escape, dsl.normalize(m).split())) + r"(?![\w'-]|[.,]\d)")
+    # Only a word character (or a digit group separator: "1.988", "988,000") blocks a marker, so
+    # "988—they helped" and "the crisis line's staff" still count (QG-P1.6-2).
+    re.compile(r"(?<!\w)(?<!\d[.,])" + r"\s+".join(map(re.escape, dsl.normalize(m).split())) + r"(?!\w|[.,]\d)")
     for m in CRISIS_MARKERS
 )
 # A numeric marker followed by one of these is a measurement ("walked 988 steps"), not a hand-off.
