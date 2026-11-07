@@ -125,6 +125,24 @@ class Journal:
     record_count: int = 0
     checkin_count: int = 0
 
+    def all_events(self) -> tuple[Any, ...]:
+        """Every event in this journal's log (a journal holds one member's events only)."""
+        events = self.events.events(self.member.member_id)
+        if len(events) != len(self.events):  # pragma: no cover - J1: only review() writes, for this member
+            raise RuntimeError("journal event log holds events for another member")
+        return events
+
+    def rebuild_events(self, prior: tuple[Any, ...]) -> None:
+        """Last-resort rollback: replace ``events`` with a fresh log holding exactly ``prior``.
+
+        ``EventLog`` is append-only with no rollback API, so a commit that failed mid-way is undone by
+        rebuilding. ``memory`` keeps reading the same log object as ``events``.
+        """
+        fresh = EventLog(self.ontology)
+        fresh.extend(prior)
+        self.events = fresh
+        self.memory._events = fresh  # MemoryLhm reads only this attribute for journal events
+
     # Id helpers take an offset so the service can name ids before it commits (no partial state).
     def event_id(self, n: int) -> str:
         return f"{self.journal_id[:8]}-e{n}"

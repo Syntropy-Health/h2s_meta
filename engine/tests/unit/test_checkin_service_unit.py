@@ -773,3 +773,62 @@ def test_deeply_nested_json_on_real_review_route_is_422(client):
 def test_deeply_nested_json_on_mode_is_still_403(client):
     r = client.post("/api/mode", content=DEEP_JSON, headers={"content-type": "application/json"})
     assert r.status_code == 403 and r.json()["error"] == "real_input_refused"
+
+
+# --- V2: a failed commit leaves nothing written -------------------------------------------------------
+
+
+def test_review_append_failing_mid_commit_is_500_and_nothing_written(client, monkeypatch):
+    from daypart.memory.events import EventLog
+
+    jid, first = _pending(client, "slept 6 hours")
+    assert _review(client, first["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}]).status_code == 200
+    j = _j(client, jid)
+    ck = _text(client, jid, "slept 6 hours and walked 8000 steps").json()
+    target = j.events
+    before_events = _signals(j)
+    before_prov = dict(j.provenance)
+    real_append = EventLog.append
+    calls = {"n": 0}
+
+    def flaky(self, event):
+        if self is target:
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise ValueError("simulated failure on the 2nd append")
+        return real_append(self, event)
+
+    monkeypatch.setattr(EventLog, "append", flaky)
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "confirm"},
+    ])
+    monkeypatch.undo()
+    assert calls["n"] == 2  # the dry run passed; the real commit failed mid-way
+    assert r.status_code == 500 and r.json()["error"] == "write_failed"
+    assert "simulated" not in r.text
+    assert len(j.events) == len(before_events) == 1
+    assert _signals(j) == before_events
+    assert j.provenance == before_prov
+    assert j.checkins[ck["checkin_id"]].status == "pending_review"
+    assert j.memory._events is j.events
+    # the journal still works: the same review now saves, with fresh event ids
+    ok = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "confirm"},
+    ])
+    assert ok.status_code == 200, ok.text
+    assert len(j.events) == 3
+
+
+def test_review_dry_run_refuses_a_duplicate_event_id_before_any_write(client):
+    jid, ck = _pending(client, "slept 6 hours and walked 8000 steps")
+    j = _j(client, jid)
+    j.event_count = 0  # the next ids collide with nothing yet ...
+    from daypart.memory.events import SignalEvent as _SE
+    j.events.append(_SE(event_id=j.event_id(2), member_id=j.member.member_id,
+                        occurred_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC), code="93832-4", value=6.0))
+    snap = _snapshot(j)  # ... except the 2nd: a partial write would land e1 first
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "confirm"}, {"proposal_id": "p-2", "action": "confirm"},
+    ])
+    assert r.status_code == 422 and r.json()["error"] == "invalid_correction"
+    assert _snapshot(j)[:2] == snap[:2] and j.checkins[ck["checkin_id"]].status == "pending_review"

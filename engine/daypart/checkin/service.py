@@ -8,7 +8,9 @@ Framework-free. Every refusal raises :class:`CheckinError`, which carries an HTT
   nothing to ``events`` or ``provenance`` (J1). A refusal leaves the journal exactly as it was.
 * :func:`review` is all-or-nothing under the journal lock: validate every decision, apply the
   corrections, re-run flags over the kept set, build and pre-check every SignalEvent, and only
-  then write events, records and the ``saved`` status together.
+  then write events, records and the ``saved`` status together. New events are dry-run on a
+  throwaway EventLog seeded with the journal's events; a commit that still fails mid-way rebuilds
+  the log from the prior events and is a 500 with nothing written.
 
 No message here ever names a ``plausible`` bound (T5.5): reasons are fixed codes.
 """
@@ -30,7 +32,7 @@ from daypart.checkin.journal import Journal, ObservationRecord, Provenance
 from daypart.checkin.models import CheckIn, Proposal
 from daypart.checkin.tripwire import scan
 from daypart.governance import real_input
-from daypart.memory.events import SignalEvent
+from daypart.memory.events import EventLog, SignalEvent
 from daypart.memory.registry import REVIEWER_STATUS, Concept, load_registry
 
 MAX_TEXT_CHARS = 500
@@ -218,13 +220,15 @@ def _noon_utc(day: dt.date) -> dt.datetime:
     return dt.datetime.combine(day, dt.time(12), tzinfo=dt.UTC)
 
 
-def _fits_event_log(journal: Journal, event: SignalEvent) -> bool:
-    """The checks ``EventLog.append`` makes, made before the first append (no partial writes)."""
-    node = journal.ontology.nodes.get(event.code)
-    if node is None or node.kind != "metric" or node.value_range is None:
-        return False
-    lo, hi = node.value_range
-    return math.isfinite(event.value) and lo <= event.value <= hi
+def _dry_run(journal: Journal, prior: Sequence[Any]) -> EventLog:
+    """A throwaway ``EventLog`` on the journal's ontology, seeded with the journal's events.
+
+    Appending the new events here first runs exactly the checks ``EventLog.append`` makes
+    (duplicate ids, metric codes, value ranges), so the real log is only touched once all pass.
+    """
+    probe = EventLog(journal.ontology)
+    probe.extend(prior)
+    return probe
 
 
 def _invalid(pids: Iterable[str], reason: str) -> CheckinError:
@@ -277,6 +281,8 @@ async def review(
         written_pids: list[str] = []
         discarded: list[str] = []
         n_event, n_record = journal.event_count, journal.record_count
+        prior = journal.all_events()
+        probe = _dry_run(journal, prior)
         for p in edited:
             d = by_id[p.proposal_id]
             if d.action == "discard":
@@ -301,8 +307,10 @@ async def review(
                     )
                 except pydantic.ValidationError:
                     raise _invalid([p.proposal_id], "value_not_recordable") from None
-                if not _fits_event_log(journal, event):
-                    raise _invalid([p.proposal_id], "value_not_recordable")
+                try:
+                    probe.append(event)
+                except ValueError:
+                    raise _invalid([p.proposal_id], "value_not_recordable") from None
                 events.append(event)
                 written_pids.append(p.proposal_id)
             n_record += 1
@@ -330,16 +338,19 @@ async def review(
             )
         saved = checkin.mark_saved()
 
-        # Commit. Every event was pre-checked against the same rules EventLog.append applies.
+        # Commit. Every event already passed a dry run on a log seeded with the journal's events.
         appended = 0
         try:
             for event in events:
                 journal.events.append(event)
                 appended += 1
-        except ValueError:
-            if appended == 0:
+        except Exception:  # noqa: BLE001 - whatever failed, the journal must be left as it was
+            if appended == 0 and len(journal.events) == len(prior):
                 raise _invalid(written_pids, "value_not_recordable") from None
-            raise  # pragma: no cover - unreachable after the pre-check; never hide a partial write
+            # A&D failure table: a 500 means nothing was written. There is no rollback API, so
+            # rebuild the log from the prior events; records and the saved status were not written.
+            journal.rebuild_events(prior)
+            raise CheckinError(500, "write_failed") from None
         for rec in records:
             journal.provenance[rec.record_id] = rec
         journal.event_count, journal.record_count = n_event, n_record
