@@ -454,3 +454,47 @@ def test_p1_regexes_are_linear_on_pathological_input(text: str) -> None:
 )
 def test_p3_born_without_on_or_in_is_date_of_birth(text: str) -> None:
     assert "date_of_birth" in scan(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "my name's John",
+        "my name’s John",
+        "I'm called Jane",
+        "I’m called Jane",
+        "name: John Smith",
+        "I'm John Smith",
+        "I’m John Smith and slept 6 hours",
+        "Hi, I'm Sam.",
+        "I'm Sam",
+        "MY NAME IS SAM",
+        "mу nаme is Sam",  # Cyrillic у and а
+        "ｍｙ ｎａｍｅ ｉｓ Sam",  # fullwidth
+        "call me Alex",
+        "Call me Аlex",  # Cyrillic capital А
+    ],
+)
+def test_p5_self_name_fires_after_normalisation(text: str) -> None:
+    assert "self_name" in scan(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I'm tired",
+        "I'm tired today, slept 6 hours",
+        "I’m feeling Better",
+        "please call me tomorrow",
+        "call me back",
+        "call me later",
+        "Call me when you can",
+    ],
+)
+def test_p5_self_name_quiet_on_ordinary_phrases(text: str) -> None:
+    assert "self_name" not in scan(text)
+
+
+@pytest.mark.parametrize("text", ["DOB 01/02/1990", "ＤＯＢ 1990-01-01", "dоb: 1990-01-01", "BORN 3/4/1990"])
+def test_p5_date_of_birth_after_normalisation(text: str) -> None:
+    assert "date_of_birth" in scan(text)

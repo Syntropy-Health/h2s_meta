@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 
+from daypart.membrane import dsl
+
 REASONS: tuple[str, ...] = ("email", "phone", "national_id", "self_name", "date_of_birth")
 
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
@@ -17,7 +19,15 @@ _ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _PHONE = re.compile(r"(?<![\w.])\+?\(?\d[\d \t\-.()]*\d(?![\w])")
 _SSN = re.compile(r"(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])")
 _DIGIT_RUN = re.compile(r"(?<![\d.])(?<!\d\.)\d{9,}(?!\d|\.\d)")
-_SELF_NAME = re.compile(r"\b(?:my\s+name\s+is|i\s+am\s+called|i'm\s+called|call\s+me)\s+[a-z][a-z'-]*", re.IGNORECASE)
+# Self-name checks. Explicit phrases fire on any following word and run on dsl.normalize() output
+# (casefold, NFKC, confusable and apostrophe fold). "call me" and "I'm" are ambiguous ("call me
+# back", "I'm tired"), so they run on the case-preserving fold and need capitalised words.
+_SELF_NAME = re.compile(
+    r"\b(?:my\s+name\s+is|my\s+name's|(?:my\s+)?name\s*[:=]|i\s+am\s+called|i'?m\s+called)\s*[a-z][a-z'-]*"
+)
+_NAME_WORD = r"[A-Z][a-z'-]*+"
+_CALL_ME = re.compile(rf"\b(?i:call\s+me)\s+{_NAME_WORD}")
+_I_AM = re.compile(rf"\b(?i:i'?m|i\s+am)\s+{_NAME_WORD}(?:\s+{_NAME_WORD}|\s*(?:[.!?]|$))")
 _MONTH = (
     r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
     r"sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
@@ -35,6 +45,11 @@ _DOB = re.compile(
 )
 
 
+def _fold_keep_case(text: str) -> str:
+    """:func:`dsl.normalize` per character, keeping upper case (so "Аlex" with a Cyrillic А → "Alex")."""
+    return "".join(n.upper() if ch.isupper() else n for ch in text for n in (dsl.normalize(ch),))
+
+
 def _has_phone(text: str) -> bool:
     masked = _ISO_DATE.sub(" ", text)
     return any(sum(ch.isdigit() for ch in m.group()) >= 10 for m in _PHONE.finditer(masked))
@@ -42,12 +57,14 @@ def _has_phone(text: str) -> bool:
 
 def scan(text: str) -> tuple[str, ...]:
     """Reason codes (in :data:`REASONS` order) for personal-data-looking content in ``text``."""
+    norm = dsl.normalize(text)
+    cased = _fold_keep_case(text)
     found = {
         "email": bool(_EMAIL.search(text)),
         "phone": _has_phone(text),
         "national_id": bool(_SSN.search(text) or _DIGIT_RUN.search(text)),
-        "self_name": bool(_SELF_NAME.search(text)),
-        "date_of_birth": bool(_DOB.search(text)),
+        "self_name": bool(_SELF_NAME.search(norm) or _CALL_ME.search(cased) or _I_AM.search(cased)),
+        "date_of_birth": bool(_DOB.search(norm)),
     }
     return tuple(r for r in REASONS if found[r])
 
