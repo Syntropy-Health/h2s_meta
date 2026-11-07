@@ -119,3 +119,33 @@ def test_events_query():
     assert len(log) == 4
     with pytest.raises(ValueError):
         log.events("syn-001", as_of=datetime(2026, 9, 2))
+
+
+# --- EventLog.check: append's checks without the write (QG-P1.6-6) -----------------------------------
+
+
+def test_check_raises_like_append_and_stores_nothing():
+    log = EventLog()
+    log.append(sig("s1"))
+    with pytest.raises(TypeError):
+        log.check("not an event")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="duplicate event_id"):
+        log.check(sig("s1"))
+    with pytest.raises(ValueError, match="not a metric node"):
+        log.check(sig("s2", code="dp:no-such-node"))
+    with pytest.raises(ValueError, match="outside"):
+        log.check(sig("s2", value=1e9))
+    log.check(act("a1"))  # a valid ActionEvent passes
+    log.check(sig("s2"))
+    assert len(log) == 1  # nothing stored, no id reserved
+    log.append(sig("s2"))
+    assert len(log) == 2
+
+
+@pytest.mark.parametrize("pending", [{"p1"}, ["p1"], frozenset({"p1"}), ("p1",)])
+def test_check_refuses_an_id_already_in_the_batch(pending):
+    log = EventLog()
+    with pytest.raises(ValueError, match="duplicate event_id"):
+        log.check(sig("p1"), pending_ids=pending)
+    log.check(sig("p2"), pending_ids=pending)
+    assert len(log) == 0
