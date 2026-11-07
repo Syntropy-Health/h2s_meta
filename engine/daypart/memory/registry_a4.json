@@ -1,0 +1,459 @@
+{
+  "registry": "a4-v1",
+  "loinc_version": "2.83",
+  "notes": [
+    "plausible bounds are input validation only and are never rendered (no clinical ranges)",
+    "alt_units map unit -> multiplicative factor to the canonical unit; body temperature has none because [degF] is an affine conversion",
+    "69725-0 failed verification on 2026-11-06 (single GAD item, not a GAD-2 total) and is dropped, not replaced (D-A5)"
+  ],
+  "gaps": [
+    "labs",
+    "conditions",
+    "medications",
+    "care history",
+    "preventive care"
+  ],
+  "concepts": [
+    {
+      "concept_id": "chc:heart-rate",
+      "code": "8867-4",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Heart rate",
+      "vertical": "vitals_body",
+      "unit": "/min",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        20.0,
+        250.0
+      ],
+      "keywords": [
+        "heart rate",
+        "pulse",
+        "hr",
+        "bpm"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:bp-systolic",
+      "code": "8480-6",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Systolic blood pressure",
+      "vertical": "vitals_body",
+      "unit": "mm[Hg]",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        40.0,
+        300.0
+      ],
+      "keywords": [
+        "blood pressure",
+        "bp",
+        "systolic"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:bp-diastolic",
+      "code": "8462-4",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Diastolic blood pressure",
+      "vertical": "vitals_body",
+      "unit": "mm[Hg]",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        20.0,
+        200.0
+      ],
+      "keywords": [
+        "diastolic"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:body-weight",
+      "code": "29463-7",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Body weight",
+      "vertical": "vitals_body",
+      "unit": "kg",
+      "alt_units": {
+        "[lb_av]": 0.45359237,
+        "lb": 0.45359237
+      },
+      "value_type": "quantity",
+      "plausible": [
+        0.0,
+        500.0
+      ],
+      "keywords": [
+        "weight",
+        "weigh",
+        "weighed"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:body-height",
+      "code": "8302-2",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Body height",
+      "vertical": "vitals_body",
+      "unit": "cm",
+      "alt_units": {
+        "[in_i]": 2.54,
+        "in": 2.54
+      },
+      "value_type": "quantity",
+      "plausible": [
+        30.0,
+        272.0
+      ],
+      "keywords": [
+        "height",
+        "tall"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:bmi",
+      "code": "39156-5",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Body mass index (BMI) [Ratio]",
+      "vertical": "vitals_body",
+      "unit": "kg/m2",
+      "alt_units": {},
+      "value_type": "quantity",
+      "plausible": [
+        5.0,
+        100.0
+      ],
+      "keywords": [
+        "bmi",
+        "body mass index"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:body-temperature",
+      "code": "8310-5",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Body temperature",
+      "vertical": "vitals_body",
+      "unit": "Cel",
+      "alt_units": {},
+      "value_type": "quantity",
+      "plausible": [
+        25.0,
+        45.0
+      ],
+      "keywords": [
+        "temperature",
+        "temp",
+        "fever"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:respiratory-rate",
+      "code": "9279-1",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Respiratory rate",
+      "vertical": "vitals_body",
+      "unit": "/min",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        2.0,
+        80.0
+      ],
+      "keywords": [
+        "respiratory rate",
+        "breaths"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:spo2",
+      "code": "59408-5",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Oxygen saturation in Arterial blood by Pulse oximetry",
+      "vertical": "vitals_body",
+      "unit": "%",
+      "alt_units": {},
+      "value_type": "quantity",
+      "plausible": [
+        50.0,
+        100.0
+      ],
+      "keywords": [
+        "spo2",
+        "oxygen saturation",
+        "o2 sat"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:waist-circumference",
+      "code": "8280-0",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Waist Circumference at umbilicus by Tape measure",
+      "vertical": "vitals_body",
+      "unit": "cm",
+      "alt_units": {
+        "[in_i]": 2.54,
+        "in": 2.54
+      },
+      "value_type": "quantity",
+      "plausible": [
+        30.0,
+        300.0
+      ],
+      "keywords": [
+        "waist"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:steps",
+      "code": "55423-8",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Number of steps in unspecified time Pedometer",
+      "vertical": "behaviour_function",
+      "unit": "{steps}",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        0.0,
+        100000.0
+      ],
+      "keywords": [
+        "steps",
+        "walked"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:steps-24h",
+      "code": "41950-7",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Number of steps in 24 hour Measured",
+      "vertical": "behaviour_function",
+      "unit": "{steps}/(24.h)",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        0.0,
+        100000.0
+      ],
+      "keywords": [
+        "steps today",
+        "daily steps",
+        "steps in 24 hours"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:exercise-duration",
+      "code": "55411-3",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Exercise duration",
+      "vertical": "behaviour_function",
+      "unit": "min",
+      "alt_units": {
+        "h": 60.0
+      },
+      "value_type": "quantity",
+      "plausible": [
+        0.0,
+        1440.0
+      ],
+      "keywords": [
+        "exercised",
+        "workout",
+        "exercise"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:sleep-duration",
+      "code": "93832-4",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Sleep duration",
+      "vertical": "behaviour_function",
+      "unit": "h",
+      "alt_units": {
+        "min": 0.016666666666666666
+      },
+      "value_type": "quantity",
+      "plausible": [
+        0.0,
+        24.0
+      ],
+      "keywords": [
+        "slept",
+        "sleep"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:adherence-protocol",
+      "code": "dp:adherence.protocol",
+      "system": "local",
+      "loinc_version": null,
+      "display": "Protocol adherence",
+      "vertical": "behaviour_function",
+      "unit": "1",
+      "alt_units": {
+        "%": 0.01
+      },
+      "value_type": "quantity",
+      "plausible": [
+        0.0,
+        1.0
+      ],
+      "keywords": [
+        "took my",
+        "adherence",
+        "protocol"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:pain-severity",
+      "code": "72514-3",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Pain severity - 0-10 verbal numeric rating [Score] - Reported",
+      "vertical": "symptoms_wellbeing",
+      "unit": "{score}",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        0.0,
+        10.0
+      ],
+      "keywords": [
+        "pain"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    },
+    {
+      "concept_id": "chc:phq9-total",
+      "code": "44261-6",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Patient Health Questionnaire 9 item (PHQ-9) total score [Reported]",
+      "vertical": "symptoms_wellbeing",
+      "unit": "{score}",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        0.0,
+        27.0
+      ],
+      "keywords": [
+        "phq-9",
+        "phq9"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation"
+    },
+    {
+      "concept_id": "chc:gad7-total",
+      "code": "70274-6",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Generalized anxiety disorder 7 item (GAD-7) total score [Reported.PHQ]",
+      "vertical": "symptoms_wellbeing",
+      "unit": "{score}",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        0.0,
+        21.0
+      ],
+      "keywords": [
+        "gad-7",
+        "gad7"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation"
+    },
+    {
+      "concept_id": "chc:phq2-total",
+      "code": "55758-7",
+      "system": "loinc",
+      "loinc_version": "2.83",
+      "display": "Patient Health Questionnaire 2 item (PHQ-2) total score [Reported]",
+      "vertical": "symptoms_wellbeing",
+      "unit": "{score}",
+      "alt_units": {},
+      "value_type": "integer",
+      "plausible": [
+        0.0,
+        6.0
+      ],
+      "keywords": [
+        "phq-2",
+        "phq2"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "display of a synthetic self-report score; no severity band, no screening interpretation"
+    },
+    {
+      "concept_id": "chc:symptom-severity",
+      "code": "dp:symptom.severity",
+      "system": "local",
+      "loinc_version": null,
+      "display": "Symptom severity (ordinal)",
+      "vertical": "symptoms_wellbeing",
+      "unit": "{score}",
+      "alt_units": {},
+      "value_type": "ordinal",
+      "plausible": [
+        1.0,
+        3.0
+      ],
+      "keywords": [
+        "symptom severity",
+        "symptoms"
+      ],
+      "reviewer_status": "draft, not clinically reviewed",
+      "allowed_use": "demo display of self-reported or simulated values; no interpretation"
+    }
+  ]
+}

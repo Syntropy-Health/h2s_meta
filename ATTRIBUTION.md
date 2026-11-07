@@ -32,6 +32,13 @@ Verify the boundary: `git diff --stat f170784 -- syntropy tests pyproject.toml u
 | numpy, pydantic, PyYAML | core | BSD / MIT |
 | FastAPI, Streamlit, uvicorn | demo | MIT / Apache-2.0 / BSD |
 | transformers, TRL, PEFT, bitsandbytes, torch (Modal image only) | training | Apache-2.0 / MIT / BSD |
+| LOINC® 2.83 (18 codes, `engine/daypart/memory/registry_a4.json`, verified in `loinc_verify_v1.csv`) | concept codes and display names for the A4 registry | [LOINC licence](https://loinc.org/license/) (Regenstrief Institute) |
+
+### LOINC
+
+This material contains content from LOINC® (https://loinc.org). LOINC is copyright © Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is available at no cost under the license at https://loinc.org/license/. LOINC® is a registered United States trademark of Regenstrief Institute, Inc.
+
+The codes are used for display of synthetic values only; no clinical interpretation. Licence: https://loinc.org/license/
 
 ## Model use
 
