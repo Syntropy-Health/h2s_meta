@@ -834,3 +834,63 @@ def test_review_dry_run_refuses_a_duplicate_event_id_before_any_write(client):
     ])
     assert r.status_code == 422 and r.json()["error"] == "invalid_correction"
     assert _snapshot(j)[:2] == snap[:2] and j.checkins[ck["checkin_id"]].status == "pending_review"
+
+
+# --- V16: review coverage ------------------------------------------------------------------------------
+
+
+def test_bp_diastolic_corrected_above_systolic_is_a_contradiction_on_both(client):
+    jid, ck = _pending(client, "bp 120/80")
+    j = _j(client, jid)
+    snap = _snapshot(j)
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "confirm"},
+        {"proposal_id": "p-2", "action": "correct", "value": 130, "unit": "mm[Hg]"},
+    ])
+    assert r.status_code == 422, r.text
+    body = r.json()
+    assert body["error"] == "unresolved_flags"
+    flags = {p["proposal_id"]: p["flags"] for p in body["proposals"]}
+    assert set(flags) == {"p-1", "p-2"}
+    assert "contradiction" in flags["p-1"] and "contradiction" in flags["p-2"]
+    assert _snapshot(j)[:2] == snap[:2] and j.checkins[ck["checkin_id"]].status == "pending_review"
+
+
+def test_weight_corrected_to_lb_plus_sleep_confirmed_saves_both(client):
+    jid, ck = _pending(client, "weighed 160 and slept 6 hours")
+    r = _review(client, ck["checkin_id"], [
+        {"proposal_id": "p-1", "action": "correct", "unit": "[lb_av]", "value": 160},
+        {"proposal_id": "p-2", "action": "confirm"},
+    ])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["written"]) == 2 and body["discarded"] == []
+    j = _j(client, jid)
+    assert len(_signals(j)) == 2
+    recs = [j.provenance[rid] for rid in body["records"]]
+    assert [rec.quality for rec in recs] == ["corrected", "confirmed"]
+    assert (recs[0].value, recs[0].unit) == (160, "[lb_av]")
+    assert (recs[1].value, recs[1].unit) == (6, "h")
+
+
+def test_confirm_on_unmapped_word_is_unresolved_flags(client):
+    jid, ck = _pending(client, "headache")
+    j = _j(client, jid)
+    snap = _snapshot(j)
+    r = _review(client, ck["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}])
+    assert r.status_code == 422 and r.json()["error"] == "unresolved_flags"
+    assert [p["proposal_id"] for p in r.json()["proposals"]] == ["p-1"]
+    assert _snapshot(j)[:2] == snap[:2]
+
+
+def test_idle_eviction_via_http_review_is_unknown_journal(monkeypatch):
+    monkeypatch.delenv("DAYPART_REAL_INPUT", raising=False)
+    with TestClient(create_app(cohort_seed=0)) as c:
+        store = c.app.state.journals
+        now = [1000.0]
+        monkeypatch.setattr(store, "_clock", lambda: now[0])
+        jid, ck = _pending(c, "slept 6 hours")
+        now[0] += store.idle_seconds + 1
+        r = _review(c, ck["checkin_id"], [{"proposal_id": "p-1", "action": "confirm"}])
+        assert r.status_code == 404 and r.json()["error"] == "unknown_journal"
+        assert c.get(f"/api/journals/{jid}/observations/obs-1").json()["error"] == "unknown_journal"
