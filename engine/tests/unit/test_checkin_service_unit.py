@@ -18,7 +18,12 @@ from fastapi.testclient import TestClient
 from daypart.checkin import service
 from daypart.checkin.crisis import HANDOFF_TEXT
 from daypart.checkin.fixtures import MAX_UPLOAD_BYTES, fixture_bytes, manifest
-from daypart.checkin.journal import JournalStore, ObservationRecord, UnknownJournal, UnknownMember
+from daypart.checkin.journal import (
+    JournalStore,
+    ObservationRecord,
+    UnknownJournal,
+    UnknownMember,
+)
 from daypart.checkin.service import CheckinError
 from daypart.demo.app import create_app
 from daypart.memory.events import SignalEvent
@@ -618,10 +623,13 @@ def _bound_tokens() -> set[str]:
 
 
 BOUNDS = _bound_tokens()
+# A registry display name is a LOINC long common name ("... 2 item (PHQ-2) total score"): its
+# digits are part of the name, not a bound.
+_REGISTRY_DISPLAYS = frozenset(c.display for c in load_registry().concepts())
 
 
 def _assert_no_bounds(obj, key=None):
-    if key in _EXEMPT_KEYS:
+    if key in _EXEMPT_KEYS or (key == "display" and obj in _REGISTRY_DISPLAYS):
         return
     if isinstance(obj, dict):
         for k, v in obj.items():

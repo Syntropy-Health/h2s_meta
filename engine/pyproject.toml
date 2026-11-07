@@ -19,6 +19,7 @@ daypart-demo = "daypart.demo.cli:main"
 [dependency-groups]
 demo = [
     "fastapi>=0.115,<1",
+    "python-multipart>=0.0.20,<1",
     "streamlit>=1.40,<2",
     "uvicorn>=0.30,<1",
 ]

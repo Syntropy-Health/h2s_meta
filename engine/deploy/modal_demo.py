@@ -60,7 +60,9 @@ def dashboard() -> None:
     )
 
 
-@app.function(min_containers=0, scaledown_window=600, timeout=600)
+# One container: journals are in memory per process (A&D Concurrency, T4.6). More containers
+# would need journals in a modal.Dict, which is out of scope.
+@app.function(min_containers=0, max_containers=1, scaledown_window=600, timeout=600)
 @modal.concurrent(max_inputs=50)
 @modal.asgi_app()
 def playground():
