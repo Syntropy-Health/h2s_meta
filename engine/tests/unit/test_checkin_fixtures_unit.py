@@ -313,3 +313,11 @@ def test_csv_uses_relative_offsets() -> None:
     lines = text.strip().splitlines()
     assert lines[0] == "date_offset_days,steps,sleep_hours,resting_heart_rate"
     assert [ln.split(",")[0] for ln in lines[1:]] == ["-2", "-1", "0"]
+
+
+@pytest.mark.parametrize("body", [b"[" * 1_000_000, b'{"a":' * 200_000])
+def test_deeply_nested_json_is_refused_not_crashed(body):
+    # QG P1.4 Q1: json.loads raises RecursionError on deep nesting; it must not escape intake.
+    assert len(body) <= fx.MAX_UPLOAD_BYTES
+    with pytest.raises(fx.FixtureError):
+        fx.intake_upload(body)

@@ -77,7 +77,7 @@ def _is_json(data: bytes) -> bool:
         return False
     try:
         json.loads(text)
-    except ValueError:
+    except (ValueError, RecursionError):  # deep nesting raises RecursionError: refuse, never crash
         return False
     return True
 
